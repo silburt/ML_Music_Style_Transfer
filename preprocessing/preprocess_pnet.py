@@ -17,13 +17,13 @@ DEBUG_DIR = '/Users/arisilburt/Machine_Learning/ML_Music_Style_Transfer/preproce
 class hyperparams(object):
     '''
     Definitions:
-        - window: a pianoroll column
+        - window: a pianoroll column / unit of time
         - chunk: the entire pianoroll segment that will constitude a data point (X windows make a chunk)
     '''
     def __init__(self):
         self.sr = 44100 # Sampling rate (samples per second)
         self.n_fft = 2048 # fft points (samples)
-        self.stride = 256 # number of windows/columns of separation between chunks
+        self.stride = 512 # number of windows of separation between chunks/data points
 
         self.piano_scores = [1760, 2308, 2490, 2491, 2527, 2533]
         self.styles = ['aliciakeys', 'cuba', 'gentleman', 'harpsichord', 'markisuitcase', 'upright']
@@ -37,6 +37,10 @@ hp = hyperparams()
 
 # mostly for debugging
 def write_chunked_samples(audio_chunk, pianoroll_chunk, out_dir, style, song_id, step):
+    '''
+    This writes the audio/pianoroll chunk to wav/midi so that you can listen/confirm that the 
+    chunks are lining up properly.
+    '''
     outpath = os.path.join(out_dir, f"{song_id}_{style}_s{step}")
     sf.write(outpath + ".wav", audio_chunk, hp.sr)
 
@@ -77,16 +81,16 @@ def split_chunk(audio, pianoroll, onoff, step, debug=False):
     '''
     Split audio into a windowed chunk
     '''
-    n_samples = hp.spc * hp.sr
-    audio_chunk = audio[(step * hp.ws * hp.stride): (step * hp.ws * hp.stride) + n_samples] 
+    n_samples_per_chunk = hp.spc * hp.sr
+    audio_chunk = audio[(step * hp.ws * hp.stride): (step * hp.ws * hp.stride) + n_samples_per_chunk] 
     
-    n_windows = hp.spc * hp.wps
-    pianoroll_chunk = pianoroll[(step * hp.stride): (step * hp.stride) + n_windows]
-    onoff_chunk = onoff[(step * hp.stride): (step * hp.stride) + n_windows]
-    if debug is True:
-        print('n_windows', n_windows)
-        print('audio/midi shape', audio_chunk.shape, pianoroll_chunk.shape)
-        print('audio/midi chunk percentages', len(audio_chunk)/len(audio), pianoroll_chunk.shape[0]/pianoroll.shape[0])
+    n_windows_per_chunk = hp.spc * hp.wps
+    pianoroll_chunk = pianoroll[(step * hp.stride): (step * hp.stride) + n_windows_per_chunk]
+    onoff_chunk = onoff[(step * hp.stride): (step * hp.stride) + n_windows_per_chunk]
+    #if debug is True:
+    #    print('n_windows', n_windows)
+    #    print('audio/midi shape', audio_chunk.shape, pianoroll_chunk.shape)
+    #    print('audio/midi chunk percentages', len(audio_chunk)/len(audio), pianoroll_chunk.shape[0]/pianoroll.shape[0])
     return audio_chunk, pianoroll_chunk, onoff_chunk
 
 
@@ -105,18 +109,25 @@ def process_datum_into_chunks(audio, pianoroll, onoff, style, song_id, debug=Tru
     score_list=[]
     onoff_list=[]
 
-    song_length = len(audio)
-    num_chunks = (song_length) // (hp.wps * hp.stride)   # number chunks per song
+    n_windows_per_chunk = hp.spc * hp.wps
+    num_chunks = (pianoroll.shape[0] - n_windows_per_chunk) // hp.stride
+
+    # audio way to calculate number of chunks
+    #n_samples_per_chunk = hp.spc * hp.sr
+    #num_chunks = (len(audio) - n_samples_per_chunk) // (hp.ws * hp.stride)
     print('song has {} chunks'.format(num_chunks))
 
-    for step in range(num_chunks - 30):   # A.S. why -30?
+    for step in range(num_chunks - 5):
         if step % 50 == 0:
             print ('{} steps of song has been done'.format(step)) 
+        
+        # get chunk
         audio_chunk, pianoroll_chunk, onoff_chunk = split_chunk(audio, pianoroll, onoff, step, debug=debug) 
         if debug == True:
             # check that the windowing alignment between midi/audio is correct
             write_chunked_samples(audio_chunk, pianoroll_chunk, DEBUG_DIR, style, song_id, step)
 
+        # append to lists
         spec_list.append(process_spectrum_from_chunk(audio_chunk))
         score_list.append(pianoroll_chunk)
         onoff_list.append(onoff_chunk)
