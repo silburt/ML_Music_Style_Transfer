@@ -106,10 +106,10 @@ def process_datum_into_chunks(audio, pianoroll, onoff, style, song_id, debug=Tru
     onoff_list=[]
 
     song_length = len(audio)
-    num_spec = (song_length) // (hp.wps * hp.stride)   # A.S. number of spectrograms per song
-    print('song has {} windows'.format(num_spec))
+    num_chunks = (song_length) // (hp.wps * hp.stride)   # number chunks per song
+    print('song has {} chunks'.format(num_chunks))
 
-    for step in range(num_spec - 30):   # A.S. why -30?
+    for step in range(num_chunks - 30):   # A.S. why -30?
         if step % 50 == 0:
             print ('{} steps of song has been done'.format(step)) 
         audio_chunk, pianoroll_chunk, onoff_chunk = split_chunk(audio, pianoroll, onoff, step, debug=debug) 
@@ -117,7 +117,7 @@ def process_datum_into_chunks(audio, pianoroll, onoff, style, song_id, debug=Tru
             # check that the windowing alignment between midi/audio is correct
             write_chunked_samples(audio_chunk, pianoroll_chunk, DEBUG_DIR, style, song_id, step)
 
-        spec_list.append(process_spectrum_from_chunk(audio_chunk, step))
+        spec_list.append(process_spectrum_from_chunk(audio_chunk))
         score_list.append(pianoroll_chunk)
         onoff_list.append(onoff_chunk)
     return np.array(spec_list), np.array(score_list), np.array(onoff_list)
@@ -162,16 +162,17 @@ def get_data(data_dir):
     '''
 
     with h5py.File(os.path.join(data_dir, f'train_data_piano.hdf5'), 'a') as train_data:
-        for index, song_id in enumerate(hp.piano_scores):
+        for song_id in hp.piano_scores:
             # get midi inputs
             pianoroll, onoff = load_midi(data_dir, song_id)
             
             for style in hp.styles:
+                print(f"processing {style} style for song_id {song_id}")
                 audio = load_audio(data_dir, song_id, style)
 
                 spec_list, score_list, onoff_list = process_datum_into_chunks(audio, pianoroll, onoff, style, song_id)
 
-                write_h5py(train_data, spec_list, score_list, onoff_list, inst, index)
+                #write_h5py(train_data, spec_list, score_list, onoff_list, inst, index)
 
 
 def main(args):
