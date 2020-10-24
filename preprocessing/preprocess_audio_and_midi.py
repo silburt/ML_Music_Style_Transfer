@@ -1,5 +1,6 @@
 # This is the general script that takes audio/midi files and prepares them as model inputs
 # TODO: some slight alignment issues between audio/midi
+# TODO: Look into https://pytorch.org/tutorials/beginner/audio_preprocessing_tutorial.html
 
 from mido import MidiFile
 import glob2
@@ -56,7 +57,7 @@ if __name__ == '__main__':
     data_type = 'test'  # test or train
     data_list_path = f'piano_pieces/piano_pieces_{data_type}.txt'
     wav_midi_dir = '../data/'
-    debug = True
+    debug = False
     
     main(data_list_path, wav_midi_dir, data_type, debug)
     
