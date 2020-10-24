@@ -31,7 +31,7 @@ class hyperparams(object):
         # A.S. each song is chopped into windows, and I *think* hop is the window length?
         self.ws = 256   # window size (audio samples per window)
         self.wps = 44100 // self.ws # ~172 windows/second
-        self.spc = 5    # length of chunk in seconds
+        self.spc = 5    # seconds per chunk
 
 hp = hyperparams()
 
@@ -78,7 +78,7 @@ def split_chunk(audio, pianoroll, onoff, step, debug=False):
     Split audio into a windowed chunk
     '''
     n_samples = hp.spc * hp.sr
-    audio_chunk = audio[(step * hp.wps * hp.stride): (step * hp.wps * hp.stride) + n_samples] 
+    audio_chunk = audio[(step * hp.ws * hp.stride): (step * hp.ws * hp.stride) + n_samples] 
     
     n_windows = hp.spc * hp.wps
     pianoroll_chunk = pianoroll[(step * hp.stride): (step * hp.stride) + n_windows]
