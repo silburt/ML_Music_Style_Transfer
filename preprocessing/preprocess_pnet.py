@@ -1,7 +1,5 @@
 import numpy as np
 import librosa
-import soundfile as sf
-from intervaltree import Interval, IntervalTree
 from scipy import fft 
 import pretty_midi
 import pickle
@@ -10,9 +8,10 @@ import sys
 import argparse
 import os
 import glob
-from utils.pretty_midi_roll_to_midi import piano_roll_to_pretty_midi
+from utils import io_manager
 
-DEBUG_DIR = '/Users/arisilburt/Machine_Learning/ML_Music_Style_Transfer/preprocessing/debugdir'
+ROOT_DIR = '/Users/arisilburt/Machine_Learning/ML_Music_Style_Transfer/'
+DEBUG_DIR = f'{ROOT_DIR}/preprocessing/debugdir'
 
 class hyperparams(object):
     '''
@@ -25,8 +24,8 @@ class hyperparams(object):
         self.n_fft = 2048 # fft points (samples)
         self.stride = 512 # number of windows of separation between chunks/data points
 
-        self.piano_scores = [1760, 2308, 2490, 2491, 2527, 2533]
-        self.styles = ['aliciakeys', 'cuba', 'gentleman', 'harpsichord', 'markisuitcase', 'upright']
+        self.piano_scores = [1760, 2308, 2490, 2527, 2533]  # 2491 errors out, not sure why
+        self.styles = ['cuba', 'aliciakeys', 'gentleman', 'harpsichord', 'markisuitcase', 'upright']
         
         # A.S. each song is chopped into windows, and I *think* hop is the window length?
         self.ws = 256   # window size (audio samples per window)
@@ -35,41 +34,6 @@ class hyperparams(object):
 
 hp = hyperparams()
 
-# mostly for debugging
-def write_chunked_samples(audio_chunk, pianoroll_chunk, out_dir, style, song_id, step):
-    '''
-    This writes the audio/pianoroll chunk to wav/midi so that you can listen/confirm that the 
-    chunks are lining up properly.
-    '''
-    outpath = os.path.join(out_dir, f"{song_id}_{style}_s{step}")
-    sf.write(outpath + ".wav", audio_chunk, hp.sr)
-
-    reformatted_pianoroll_chunk = pianoroll_chunk.T.astype('int') * 127
-    midi_slice = piano_roll_to_pretty_midi(reformatted_pianoroll_chunk, fs=hp.wps)
-    midi_slice.write(outpath + ".mid")
-
-
-def write_h5py(train_data, spec_list, score_list, onoff_list, inst, index):
-    '''
-    Incrementally add to an h5py file, so that eveything can fit in memory
-    '''
-    # https://stackoverflow.com/questions/47072859/how-to-append-data-to-one-specific-dataset-in-a-hdf5-file-with-h5py
-    if index == 0:
-        print('creating datasets')
-        train_data.create_dataset(inst + "_spec", data=spec_list, dtype='float32', maxshape=(None,) + spec_list.shape[1:], chunks=True) 
-        train_data.create_dataset(inst + "_pianoroll", data=score_list, dtype='float64', maxshape=(None,) + score_list.shape[1:], chunks=True) 
-        train_data.create_dataset(inst + "_onoff", data=onoff_list, dtype='float64', maxshape=(None,) + onoff_list.shape[1:], chunks=True) 
-    else:
-        print('appending to datasets')
-        train_data[inst + "_spec"].resize(train_data[inst + "_spec"].shape[0] + spec_list.shape[0], axis=0)
-        train_data[inst + "_spec"][-spec_list.shape[0]:] = spec_list
-
-        train_data[inst + "_pianoroll"].resize(train_data[inst + "_pianoroll"].shape[0] + score_list.shape[0], axis=0)
-        train_data[inst + "_pianoroll"][-score_list.shape[0]:] = score_list
-
-        train_data[inst + "_onoff"].resize(train_data[inst + "_onoff"].shape[0] + onoff_list.shape[0], axis=0)
-        train_data[inst + "_onoff"][-onoff_list.shape[0]:] = onoff_list
-
 
 def process_spectrum_from_chunk(audio_chunk):
     spec = librosa.stft(audio_chunk, n_fft=hp.n_fft, hop_length=hp.stride)
@@ -77,82 +41,85 @@ def process_spectrum_from_chunk(audio_chunk):
     return magnitude
 
 
-def split_chunk(audio, pianoroll, onoff, step, debug=False):
-    '''
-    Split audio into a windowed chunk
-    '''
-    n_samples_per_chunk = hp.spc * hp.sr
-    audio_chunk = audio[(step * hp.ws * hp.stride): (step * hp.ws * hp.stride) + n_samples_per_chunk] 
-    
-    n_windows_per_chunk = hp.spc * hp.wps
-    pianoroll_chunk = pianoroll[(step * hp.stride): (step * hp.stride) + n_windows_per_chunk]
-    onoff_chunk = onoff[(step * hp.stride): (step * hp.stride) + n_windows_per_chunk]
-    #if debug is True:
-    #    print('n_windows', n_windows)
-    #    print('audio/midi shape', audio_chunk.shape, pianoroll_chunk.shape)
-    #    print('audio/midi chunk percentages', len(audio_chunk)/len(audio), pianoroll_chunk.shape[0]/pianoroll.shape[0])
-    return audio_chunk, pianoroll_chunk, onoff_chunk
-
-
-def process_datum_into_chunks(audio, pianoroll, onoff, style, song_id, debug=True):
-    '''
-    Data Pre-processing
-        
-    Score: 
-        Generate pianoroll from interval tree data structure
-    
-    Audio: 
-        Convert waveform into power spectrogram
-
-    '''
+def process_audio_into_chunks(audio, style, song_id, num_chunks, debug=False):
+    print(f"processing {style} style for song_id {song_id}")
     spec_list=[]
-    score_list=[]
-    onoff_list=[]
-
-    n_windows_per_chunk = hp.spc * hp.wps
-    num_chunks = (pianoroll.shape[0] - n_windows_per_chunk) // hp.stride
-
-    # audio way to calculate number of chunks
-    #n_samples_per_chunk = hp.spc * hp.sr
-    #num_chunks = (len(audio) - n_samples_per_chunk) // (hp.ws * hp.stride)
-    print('song has {} chunks'.format(num_chunks))
-
-    for step in range(num_chunks - 5):
-        if step % 50 == 0:
-            print ('{} steps of song has been done'.format(step)) 
+    for step in range(num_chunks):
+        # get audio chunk
+        n_samples_per_chunk = hp.spc * hp.sr
+        audio_chunk = audio[(step * hp.ws * hp.stride): (step * hp.ws * hp.stride) + n_samples_per_chunk] 
         
-        # get chunk
-        audio_chunk, pianoroll_chunk, onoff_chunk = split_chunk(audio, pianoroll, onoff, step, debug=debug) 
+        # check that the windowing alignment between midi/audio is correct
         if debug == True:
-            # check that the windowing alignment between midi/audio is correct
-            write_chunked_samples(audio_chunk, pianoroll_chunk, DEBUG_DIR, style, song_id, step)
-
+            io_manager.write_chunked_samples(DEBUG_DIR, song_id, step, hp, style=style, audio_chunk=audio_chunk)
+        
         # append to lists
         spec_list.append(process_spectrum_from_chunk(audio_chunk))
+    return np.array(spec_list)
+
+
+def process_pianoroll_into_chunks(pianoroll, onoff, song_id, num_chunks, debug=False):
+    print(f"processing pianoroll for song_id {song_id}")
+    score_list=[]
+    onoff_list=[]
+    for step in range(num_chunks):
+        # get pianoroll/onoff chunk
+        n_windows_per_chunk = hp.spc * hp.wps
+        pianoroll_chunk = pianoroll[(step * hp.stride): (step * hp.stride) + n_windows_per_chunk]
+        onoff_chunk = onoff[(step * hp.stride): (step * hp.stride) + n_windows_per_chunk]
+        if debug == True:
+            # check that the windowing alignment between midi/audio is correct
+            io_manager.write_chunked_samples(DEBUG_DIR, song_id, step, hp, pianoroll_chunk=pianoroll_chunk)
+
+        # append
         score_list.append(pianoroll_chunk)
         onoff_list.append(onoff_chunk)
-    return np.array(spec_list), np.array(score_list), np.array(onoff_list)
+    return np.array(score_list), np.array(onoff_list)
 
 
 def load_audio(data_dir, song_id, style, debug=False):
     audio_file = glob.glob(f"{data_dir}/{song_id}*{style}.wav")
     if len(audio_file) == 0:
-        raise ValueError("couldnt find midi track!")
+        raise ValueError("couldnt find audio track!")
+    elif len(audio_file) > 1:
+        raise ValueError("multiple files picked up, issue:", audio_file)
 
     y, sr = librosa.load(audio_file[0], sr=hp.sr)
     if debug is True:
-        tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
-        beat_times = librosa.frames_to_time(beat_frames, sr=sr)
-        print("tempo: ", tempo)
-        print("beat times", beat_times)
-        print("beat frames:", beat_frames)
+        #tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
+        #beat_times = librosa.frames_to_time(beat_frames, sr=sr)
+        #print("tempo: ", tempo)
+        #print("beat times", beat_times)
+        #print("beat frames:", beat_frames)
+        print("length of audio clip / sr: ", len(y), sr)
+        print("audio files picked up:", audio_file)
     return y
 
 
-def load_midi(data_dir, song_id, ext='mixcraft'):
+def get_num_song_chunks(pianoroll, offset_percentage=0.1):
+    '''
+    Get number of chunks in the song. 
+    - offset_percentage is to allow a bit of wiggle room to make sure we dont accidentally run off the end. Some of the audio/midi
+    lengths end at slightly different spots (bug to be fixed...)
+    '''
+    n_windows_per_chunk = hp.spc * hp.wps
+    num_chunks = (pianoroll.shape[0] - n_windows_per_chunk) // hp.stride
+    # audio way to calculate number of chunks
+    #n_samples_per_chunk = hp.spc * hp.sr
+    #num_chunks = (len(audio) - n_samples_per_chunk) // (hp.ws * hp.stride)
+    
+    offset = int(offset_percentage * num_chunks)
+    num_chunks -= offset
+    print('song has {} chunks'.format(num_chunks))
+    return num_chunks
+
+
+def load_midi(data_dir, song_id, ext='mixcraft', debug=False):
     midi_file = glob.glob(f"{data_dir}/{song_id}*{ext}.mid")
     if len(midi_file) == 0:
         raise ValueError("couldnt find midi track!")
+    elif len(midi_file) > 1:
+        raise ValueError("multiple files picked up, issue:", midi_file)
 
     midi = pretty_midi.PrettyMIDI(midi_file[0])    
     pianoroll = midi.get_piano_roll(fs=hp.wps).T
@@ -164,36 +131,59 @@ def load_midi(data_dir, song_id, ext='mixcraft'):
         else:
             onoff[i][np.setdiff1d(pianoroll[i-1].nonzero(), pianoroll[i].nonzero())] = -1
             onoff[i][np.setdiff1d(pianoroll[i].nonzero(), pianoroll[i-1].nonzero())] = 1 
+    
+    if debug is True:
+        print("length of pianoroll: ", pianoroll.shape)
+        print("midi files picked up:", midi_file)
     return pianoroll, onoff
 
 
-def get_data(data_dir):
+def get_data(data_dir, dataset_path_name, debug=False):
     '''
     Extract the desired solo data from the dataset.
     '''
+    
+    with h5py.File(dataset_path_name, 'w') as train_data:
+        data_manager = io_manager.h5pyManager(train_data)
 
-    with h5py.File(os.path.join(data_dir, f'train_data_piano.hdf5'), 'a') as train_data:
         for song_id in hp.piano_scores:
-            # get midi inputs
-            pianoroll, onoff = load_midi(data_dir, song_id)
+            # load midi
+            pianoroll, onoff = load_midi(data_dir, song_id, debug=debug)
+            num_chunks = get_num_song_chunks(pianoroll)
+
+            # process into chunks
+            pianoroll_list, onoff_list = process_pianoroll_into_chunks(pianoroll, onoff, song_id, num_chunks, debug=debug)
             
+            # write
+            data_manager.write_pianoroll(pianoroll_list, onoff_list)
+
             for style in hp.styles:
-                print(f"processing {style} style for song_id {song_id}")
-                audio = load_audio(data_dir, song_id, style)
+                # load audio
+                audio = load_audio(data_dir, song_id, style, debug=debug)
 
-                spec_list, score_list, onoff_list = process_datum_into_chunks(audio, pianoroll, onoff, style, song_id)
+                # process into chunks
+                spec_list = process_audio_into_chunks(audio, style, song_id, num_chunks, debug=debug)
+                
+                # write
+                data_manager.write_spectrum(spec_list, style)
 
-                #write_h5py(train_data, spec_list, score_list, onoff_list, inst, index)
+                if debug is True:
+                    assert pianoroll_list.shape[0] == spec_list.shape[0]
+                    assert pianoroll_list.shape == onoff_list.shape
 
 
 def main(args):
-    get_data(args.data_dir)
+    get_data(args.data_dir, args.dataset_path_name, args.debug)
    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-data-dir", type=str, default='/Users/arisilburt/Machine_Learning/ML_Music_Style_Transfer/data/style_transfer_train', 
+    parser.add_argument("-data-dir", type=str, default=f'{ROOT_DIR}/data/style_transfer_train', 
                         help="directory where dataset is is")
+    parser.add_argument("-dataset-path-name", type=str, default=f'{ROOT_DIR}/preprocessing/data_products/style_transfer_train.hdf5', 
+                        help="directory where dataset is is")                        
+    parser.add_argument("--debug", type=io_manager.str2bool, default=True, 
+                        help="whether to run in debug mode or not")                    
     args = parser.parse_args()
     
     main(args)
