@@ -21,8 +21,6 @@ if torch.cuda.is_available():
     cuda = torch.device("cuda")
     CUDA_FLAG = 1
 
-DEFAULT_STYLES = ['cuba', 'aliciakeys', 'gentleman', 'harpsichord', 'markisuitcase', 'upright']
-
 class hyperparams(object):
     def __init__(self, args):
         self.instrument = args.instrument
