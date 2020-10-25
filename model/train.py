@@ -6,7 +6,7 @@ import numpy as np
 import torch.optim as optim
 from sklearn.model_selection import train_test_split
 import torch.utils.data as utils
-import h5py 
+import h5py
 import sys
 import os
 import json
@@ -14,12 +14,14 @@ from model import PerformanceNet
 import argparse
 import os
 import time
+import random
 
 CUDA_FLAG = 0
 if torch.cuda.is_available():
     cuda = torch.device("cuda")
     CUDA_FLAG = 1
 
+DEFAULT_STYLES = ['cuba', 'aliciakeys', 'gentleman', 'harpsichord', 'markisuitcase', 'upright']
 
 class hyperparams(object):
     def __init__(self, args):
@@ -37,10 +39,11 @@ class hyperparams(object):
 
 class Dataseth5py(torch.utils.data.Dataset):
     # https://discuss.pytorch.org/t/how-to-speed-up-the-data-loader/13740/3
-    def __init__(self, in_file, instr, n_read=None):
+    def __init__(self, in_file, styles, seed=42, n_read=None):
         super(Dataseth5py, self).__init__()
 
         self.dataset = h5py.File(in_file, 'r')
+        self.styles = styles
 
         # TODO: the big issue is you need to optimize how to read data into memory from h5py
         # loading one-by-one is way too slow (a few seconds vs. microseconds). Note that the 
@@ -48,59 +51,73 @@ class Dataseth5py(torch.utils.data.Dataset):
         # (and thus, after this loading issue is solved FloatTensor becomes the bottleneck unless it 
         # can be moved to the main train() function and be applied to batches vs individual items here)
         if n_read is not None:
-            self.score = self.dataset['{}_pianoroll'.format(instr)][:n_read]
-            self.spec = self.dataset['{}_spec'.format(instr)][:n_read]
-            self.onoff = self.dataset['{}_onoff'.format(instr)][:n_read]
+            self.pianoroll = self.dataset['pianoroll'][:n_read]
+            self.onoff = self.dataset['onoff'][:n_read]
+            self.specs = {}
+            for style in self.styles:
+                self.specs[style] = self.dataset[f'spec_{style}'][:n_read] 
         else:
-            self.score = self.dataset['{}_pianoroll'.format(instr)][:]
-            self.spec = self.dataset['{}_spec'.format(instr)][:]
-            self.onoff = self.dataset['{}_onoff'.format(instr)][:]
+            self.pianoroll = self.dataset['pianoroll'][:]
+            self.onoff = self.dataset['onoff'][:]
+            self.specs = {}
+            for style in self.styles:
+                self.specs[style] = self.dataset[f'spec_{style}'][:]
 
-        self.n_data = self.spec.shape[0]
+        self.n_data = self.pianoroll.shape[0]
+        random.seed(seed)
 
     def __getitem__(self, index):
-        spec = self.spec[index]
-        score = self.score[index]
+        '''
+        The input data are the pianoroll, onoff, a *random* spec from the same style
+        The output data is the *matching* spec for the corresponding pianoroll/onoff
+        '''
+        # piano
+        pianoroll = self.pianoroll[index]
         onoff = self.onoff[index]
+        pianoroll = np.concatenate((pianoroll, onoff), axis = -1)
+        pianoroll = np.transpose(pianoroll, (1, 0))
 
-        score = np.concatenate((score, onoff), axis = -1)
-        score = np.transpose(score, (1, 0))
+        # specs
+        style = random.choice(self.styles)
+        spec = self.specs[style][index]
+        spec_rand = self.specs[style][random.randint(0, self.n_data)]
 
         if CUDA_FLAG == 1:
-            X = torch.cuda.FloatTensor(score)
+            X = torch.cuda.FloatTensor(pianoroll)
+            X_cond = torch.cuda.FloatTensor(spec_rand)
             y = torch.cuda.FloatTensor(spec)
         else:
-            X = torch.Tensor(score)
+            X = torch.Tensor(pianoroll)
+            X_cond = torch.Tensor(spec_rand)
             y = torch.Tensor(spec)
-        return X, y
+        return X, X_cond, y
 
     def __len__(self):
         return self.n_data
 
 
-def Process_Data(instr, exp_dir, data_dir, n_read=None, batch_size=16):
-    dataset = Dataseth5py(os.path.join(data_dir, f'train_data_{instr}.hdf5'), instr, n_read)
+def Process_Data(data_dir, train_name, test_name, n_train_read=None, batch_size=16):
+    train_dataset = Dataseth5py(os.path.join(data_dir, train_name), DEFAULT_STYLES, n_train_read)
+    test_dataset = Dataseth5py(os.path.join(data_dir, test_name), DEFAULT_STYLES)
 
     kwargs = {}
-    train_loader = utils.DataLoader(dataset, batch_size=batch_size, shuffle=True, **kwargs)
-
-    # TODO: This needs to be an *actual* test set
-    test_loader = utils.DataLoader(dataset, batch_size=batch_size)
+    train_loader = utils.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, **kwargs)
+    test_loader = utils.DataLoader(test_dataset, batch_size=batch_size, **kwargs)
     return train_loader, test_loader
 
 
 def train(model, epoch, train_loader, optimizer, iter_train_loss):
     model.train()
     train_loss = 0
-    for batch_idx, (data, target) in enumerate(train_loader):        
+    for batch_idx, (data, data_cond, target) in enumerate(train_loader):        
         optimizer.zero_grad()
         split = torch.split(data, 128, dim=1)
         loss_function = nn.MSELoss()
         if CUDA_FLAG == 1:
-            y_pred = model(split[0].cuda(), target.cuda(), split[1].cuda())
+            y_pred = model(split[0].cuda(), data_cond.cuda(), split[1].cuda())
             loss = loss_function(y_pred, target.cuda())
         else:
-            y_pred = model(split[0], target, split[1])  # A.S. adding target (spectrogram) to input as extra conditioning
+            y_pred = model(split[0], data_cond, split[1]) 
             loss = loss_function(y_pred, target)
         
         loss.backward()
@@ -119,14 +136,14 @@ def test(model, epoch, test_loader, scheduler, iter_test_loss):
     with torch.no_grad():
         model.eval()
         test_loss = 0
-        for idx, (data, target) in enumerate(test_loader):
+        for idx, (data, data_cond, target) in enumerate(test_loader):
             split = torch.split(data, 128, dim=1)
             loss_function = nn.MSELoss()
             if CUDA_FLAG == 1:
-                y_pred = model(split[0].cuda(), target.cuda(), split[1].cuda())
+                y_pred = model(split[0].cuda(), data_cond.cuda(), split[1].cuda())
                 loss = loss_function(y_pred, target.cuda())
             else:
-                y_pred = model(split[0], target, split[1])
+                y_pred = model(split[0], data_cond, split[1])
                 loss = loss_function(y_pred, target)
             iter_test_loss.append(loss.item())
             test_loss += loss    
@@ -155,7 +172,8 @@ def main(args):
     model.zero_grad()
     optimizer.zero_grad()
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
-    train_loader, test_loader = Process_Data(hp.instrument, exp_dir, args.data_dir, args.n_read, args.batch_size)
+    train_loader, test_loader = Process_Data(args.data_dir, args.train_dataset_name, args.test_dataset_name, 
+                                             n_train_read=args.n_train_read, batch_size=args.batch_size)
     print ('start training')
     for epoch in range(hp.train_epoch):
         loss = train(model, epoch, train_loader, optimizer, hp.iter_train_loss)
@@ -176,12 +194,13 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-data-dir", type=str, default='/Users/arisilburt/Machine_Learning/music/PerformanceNet_ari/data/', help="directory where musicnet.npz is")
-    parser.add_argument("-instrument", type=str, default='cello')
+    parser.add_argument("-data-dir", type=str, default='/Users/arisilburt/Machine_Learning/music/PerformanceNet_ari/data/', help="directory where data is")
+    parser.add_argument("-train-dataset-name", type=str, default='style_transfer_train.hdf5', help="name of training data h5py file")
+    parser.add_argument("-test-dataset-name", type=str, default='style_transfer_test.hdf5', help="name of test data h5py file")
     parser.add_argument("-epochs", type=int, default=1)
-    parser.add_argument("-test-freq", type=int, default=1)
-    parser.add_argument("-exp-name", type=str, default='cello_test')
-    parser.add_argument("--n-read", type=int, default=None, help='How many data points to read (length of an epoch)')
+    parser.add_argument("-test-freq", type=int, default=1, help='how many epochs between running against test data')
+    parser.add_argument("-exp-name", type=str, default='piano_test')
+    parser.add_argument("--n-train-read", type=int, default=None, help='How many data points to read (length of an epoch)')
     parser.add_argument("--batch-size", type=int, default=16)
     args = parser.parse_args()
     
