@@ -96,9 +96,9 @@ class Dataseth5py(torch.utils.data.Dataset):
         return self.n_data
 
 
-def Process_Data(data_dir, train_name, test_name, n_train_read=None, batch_size=16):
-    train_dataset = Dataseth5py(os.path.join(data_dir, train_name), n_read=n_train_read)
-    test_dataset = Dataseth5py(os.path.join(data_dir, test_name))
+def Process_Data(data_dir, data_basename, n_train_read=None, batch_size=16):
+    train_dataset = Dataseth5py(os.path.join(data_dir, data_basename + '_train.h5py'), n_read=n_train_read)
+    test_dataset = Dataseth5py(os.path.join(data_dir, data_basename + '_test.h5py'))
 
     kwargs = {}
     train_loader = utils.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, **kwargs)
@@ -172,8 +172,8 @@ def main(args):
     model.zero_grad()
     optimizer.zero_grad()
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
-    train_loader, test_loader = Process_Data(args.data_dir, args.train_dataset_name, args.test_dataset_name, 
-                                             n_train_read=args.n_train_read, batch_size=args.batch_size)
+    train_loader, test_loader = Process_Data(args.data_dir, args.dataset_basename, n_train_read=args.n_train_read, 
+                                             batch_size=args.batch_size)
     print ('start training')
     for epoch in range(hp.train_epoch):
         loss = train(model, epoch, train_loader, optimizer, hp.iter_train_loss)
@@ -195,8 +195,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-data-dir", type=str, default='/Users/arisilburt/Machine_Learning/music/PerformanceNet_ari/data/', help="directory where data is")
-    parser.add_argument("-train-dataset-name", type=str, default='style_transfer_train.hdf5', help="name of training data h5py file")
-    parser.add_argument("-test-dataset-name", type=str, default='style_transfer_test.hdf5', help="name of test data h5py file")
+    parser.add_argument("-dataset-basename", type=str, default='style_transfer', help="basename of train/test data h5py file")
     parser.add_argument("-epochs", type=int, default=1)
     parser.add_argument("-test-freq", type=int, default=1, help='how many epochs between running against test data')
     parser.add_argument("-exp-name", type=str, default='piano_test')
