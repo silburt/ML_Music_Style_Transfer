@@ -39,11 +39,11 @@ class hyperparams(object):
 
 class Dataseth5py(torch.utils.data.Dataset):
     # https://discuss.pytorch.org/t/how-to-speed-up-the-data-loader/13740/3
-    def __init__(self, in_file, styles, seed=42, n_read=None):
+    def __init__(self, in_file, seed=42, n_read=None):
         super(Dataseth5py, self).__init__()
 
         self.dataset = h5py.File(in_file, 'r')
-        self.styles = styles
+        self.styles = [name for name in self.dataset.keys() if 'spec_' in name] # get styles from the data
 
         # TODO: the big issue is you need to optimize how to read data into memory from h5py
         # loading one-by-one is way too slow (a few seconds vs. microseconds). Note that the 
@@ -97,8 +97,8 @@ class Dataseth5py(torch.utils.data.Dataset):
 
 
 def Process_Data(data_dir, train_name, test_name, n_train_read=None, batch_size=16):
-    train_dataset = Dataseth5py(os.path.join(data_dir, train_name), DEFAULT_STYLES, n_train_read)
-    test_dataset = Dataseth5py(os.path.join(data_dir, test_name), DEFAULT_STYLES)
+    train_dataset = Dataseth5py(os.path.join(data_dir, train_name), n_read=n_train_read)
+    test_dataset = Dataseth5py(os.path.join(data_dir, test_name))
 
     kwargs = {}
     train_loader = utils.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, **kwargs)

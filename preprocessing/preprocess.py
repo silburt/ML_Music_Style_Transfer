@@ -24,7 +24,10 @@ class hyperparams(object):
         self.n_fft = 2048 # fft points (samples)
         self.stride = 512 # number of windows of separation between chunks/data points
 
-        self.piano_scores = [1760, 2308, 2490, 2527, 2533]  # 2491 errors out, not sure why
+        self.piano_scores = {
+            'train': [1760, 2308, 2490, 2527],  # 2491 errors out, not sure why
+            'test': [2533]
+        }
         self.styles = ['cuba', 'aliciakeys', 'gentleman', 'harpsichord', 'markisuitcase', 'upright']
         
         # A.S. each song is chopped into windows, and I *think* hop is the window length?
@@ -138,15 +141,16 @@ def load_midi(data_dir, song_id, ext='mixcraft', debug=False):
     return pianoroll, onoff
 
 
-def get_data(data_dir, dataset_path_name, debug=False):
+def get_data(data_dir, dataset_path_basename, data_type, debug=False):
     '''
     Extract the desired solo data from the dataset.
     '''
     
-    with h5py.File(dataset_path_name, 'w') as train_data:
-        data_manager = io_manager.h5pyManager(train_data)
+    h5pyname = f"{dataset_path_basename}_{data_type}.hdf5"
+    with h5py.File(h5pyname, 'w') as h5py_data:
+        data_manager = io_manager.h5pyManager(h5py_data)
 
-        for song_id in hp.piano_scores:
+        for song_id in hp.piano_scores[data_type]:
             # load midi
             pianoroll, onoff = load_midi(data_dir, song_id, debug=debug)
             num_chunks = get_num_song_chunks(pianoroll)
@@ -173,15 +177,17 @@ def get_data(data_dir, dataset_path_name, debug=False):
 
 
 def main(args):
-    get_data(args.data_dir, args.dataset_path_name, args.debug)
+    get_data(args.data_dir, args.dataset_path_basename, args.data_type, args.debug)
    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-data-dir", type=str, default=f'{ROOT_DIR}/data/style_transfer_train', 
                         help="directory where dataset is is")
-    parser.add_argument("-dataset-path-name", type=str, default=f'{ROOT_DIR}/preprocessing/data_products/style_transfer_train.hdf5', 
-                        help="directory where dataset is is")                        
+    parser.add_argument("-dataset-path-basename", type=str, default=f'{ROOT_DIR}/preprocessing/data_products/style_transfer', 
+                        help="directory where dataset is is")
+    parser.add_argument("-data-type", type=str, default='train', choices=['train', 'test'],
+                        help="directory where dataset is is")                                         
     parser.add_argument("--debug", type=io_manager.str2bool, default=False, 
                         help="whether to run in debug mode or not")                    
     args = parser.parse_args()

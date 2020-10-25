@@ -40,8 +40,8 @@ class h5pyManager():
     '''
     Manages writing data to h5py. The indexes should line up properly such that pianoroll[i]/onoff[i]/spec_{style}[i] match.
     '''
-    def __init__(self, train_data):
-        self.train_data = train_data
+    def __init__(self, data):
+        self.data = data
 
     def write_pianoroll(self, pianoroll_list, onoff_list):
         '''
@@ -49,17 +49,17 @@ class h5pyManager():
         https://stackoverflow.com/questions/47072859/how-to-append-data-to-one-specific-dataset-in-a-hdf5-file-with-h5py
         '''
         # TODO: find out elegant chunking - different songs have different numbers of chunks
-        if 'pianoroll' not in self.train_data:
+        if 'pianoroll' not in self.data:
             # create
-            self.train_data.create_dataset("pianoroll", data=pianoroll_list, dtype='float64', maxshape=(None,) + pianoroll_list.shape[1:], chunks=True) 
-            self.train_data.create_dataset("onoff", data=onoff_list, dtype='float64', maxshape=(None,) + onoff_list.shape[1:], chunks=True) 
+            self.data.create_dataset("pianoroll", data=pianoroll_list, dtype='float64', maxshape=(None,) + pianoroll_list.shape[1:], chunks=True) 
+            self.data.create_dataset("onoff", data=onoff_list, dtype='float64', maxshape=(None,) + onoff_list.shape[1:], chunks=True) 
         else:
             # append
-            self.train_data["pianoroll"].resize(self.train_data["pianoroll"].shape[0] + pianoroll_list.shape[0], axis=0)
-            self.train_data["pianoroll"][-pianoroll_list.shape[0]:] = pianoroll_list
+            self.data["pianoroll"].resize(self.data["pianoroll"].shape[0] + pianoroll_list.shape[0], axis=0)
+            self.data["pianoroll"][-pianoroll_list.shape[0]:] = pianoroll_list
 
-            self.train_data["onoff"].resize(self.train_data["onoff"].shape[0] + onoff_list.shape[0], axis=0)
-            self.train_data["onoff"][-onoff_list.shape[0]:] = onoff_list
+            self.data["onoff"].resize(self.data["onoff"].shape[0] + onoff_list.shape[0], axis=0)
+            self.data["onoff"][-onoff_list.shape[0]:] = onoff_list
 
     def write_spectrum(self, spec_list, style):
         '''
@@ -67,11 +67,11 @@ class h5pyManager():
         '''
         # TODO: find out elegant chunking - different songs have different numbers of chunks
         key_name = f'spec_{style}'
-        if key_name not in self.train_data:
+        if key_name not in self.data:
             # create
-            self.train_data.create_dataset(key_name, data=spec_list, dtype='float64', maxshape=(None,) + spec_list.shape[1:], chunks=True) 
+            self.data.create_dataset(key_name, data=spec_list, dtype='float64', maxshape=(None,) + spec_list.shape[1:], chunks=True) 
         else:
             # append
-            self.train_data[key_name].resize(self.train_data[key_name].shape[0] + spec_list.shape[0], axis=0)
-            self.train_data[key_name][-spec_list.shape[0]:] = spec_list
+            self.data[key_name].resize(self.data[key_name].shape[0] + spec_list.shape[0], axis=0)
+            self.data[key_name][-spec_list.shape[0]:] = spec_list
 
