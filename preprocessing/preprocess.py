@@ -182,7 +182,7 @@ if __name__ == "__main__":
                         help="directory where dataset is is")
     parser.add_argument("-dataset-path-name", type=str, default=f'{ROOT_DIR}/preprocessing/data_products/style_transfer_train.hdf5', 
                         help="directory where dataset is is")                        
-    parser.add_argument("--debug", type=io_manager.str2bool, default=True, 
+    parser.add_argument("--debug", type=io_manager.str2bool, default=False, 
                         help="whether to run in debug mode or not")                    
     args = parser.parse_args()
     
