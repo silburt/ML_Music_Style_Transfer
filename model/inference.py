@@ -14,15 +14,17 @@ import soundfile as sf
 from tqdm import tqdm
 import sys
 sys.path.append('../preprocessing/')
-from preprocess import process_spectrum_from_chunk
+from preprocess import process_spectrum_from_chunk, hyperparams
+
+preprocess_hp = hyperparams()
 
 
 class AudioSynthesizer():
     def __init__(self, checkpoint, exp_dir, midi_source, audio_source):
         self.exp_dir = exp_dir
         self.checkpoint = torch.load(os.path.join(exp_dir, checkpoint))
-        self.sample_rate = 44100
-        self.wps = 44100//256
+        self.sample_rate = preprocess_hp.sr
+        self.wps = preprocess_hp.wps
         self.midi_source = midi_source
         self.audio_source = audio_source
                 
@@ -34,7 +36,7 @@ class AudioSynthesizer():
 
     def process_custom_midi_and_audio(self, midi_filename, audio_filename):
         # process midi
-        midi_dir = os.path.join(self.exp_dir,'midi')
+        midi_dir = os.path.join(self.exp_dir, 'midi')
         midi = pretty_midi.PrettyMIDI(os.path.join(midi_dir, midi_filename))    
         pianoroll = midi.get_piano_roll(fs=self.wps).T
         pianoroll[pianoroll.nonzero()] = 1
@@ -47,7 +49,7 @@ class AudioSynthesizer():
                 onoff[i][np.setdiff1d(pianoroll[i].nonzero(), pianoroll[i-1].nonzero())] = 1 
         
         # process audio
-        audio, sr = librosa.load(audio_filename)
+        audio, sr = librosa.load(audio_filename, sr=preprocess_hp.sr)
         spec = process_spectrum_from_chunk(audio)
         #spec = librosa.stft(audio, n_fft=process_hp.n_fft, hop_length=process_hp.stride)
         #magnitude = np.log1p(np.abs(spec)**2)
