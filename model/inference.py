@@ -10,9 +10,11 @@ import json
 import os
 from model import PerformanceNet
 import librosa
+import soundfile as sf
 from tqdm import tqdm
 import sys
-from process_data import hyperparams
+sys.path.append('../preprocessing/')
+from preprocess import hyperparams
 
 process_hp = hyperparams()
 
@@ -67,10 +69,10 @@ class AudioSynthesizer():
 
 
     def inference(self):
+        score, onoff, spec = self.process_custom_midi_and_audio(self.midi_source, self.audio_source)
+
         model = PerformanceNet().cuda()
         model.load_state_dict(self.checkpoint['state_dict'])
-
-        score, onoff, spec = self.process_custom_midi_and_audio(self.midi_source, self.audio_source)
                    
         print ('Inferencing spectrogram......')
 
@@ -83,7 +85,7 @@ class AudioSynthesizer():
 
         for i in range(len(test_results)):
             audio = self.griffinlim(test_results[i], audio_id = i+1)
-            librosa.output.write_wav(os.path.join(output_dir,'output-{}.wav'.format(i+1)), audio, self.sample_rate)
+            sf.write(os.path.join(output_dir,'output-{}.wav'.format(i+1)), audio, self.sample_rate)
     
     def create_output_dir(self):
         success = False

@@ -79,7 +79,8 @@ class Dataseth5py(torch.utils.data.Dataset):
         # specs
         style = random.choice(self.styles)
         spec = self.specs[style][index]
-        spec_rand = self.specs[style][random.randint(0, self.n_data)]
+        rand_index = random.randint(0, self.n_data - 1)
+        spec_rand = self.specs[style][rand_index]
 
         if CUDA_FLAG == 1:
             X = torch.cuda.FloatTensor(pianoroll)
@@ -96,7 +97,9 @@ class Dataseth5py(torch.utils.data.Dataset):
 
 
 def Process_Data(data_dir, data_basename, n_train_read=None, batch_size=16):
+    print("loading training data")
     train_dataset = Dataseth5py(os.path.join(data_dir, data_basename + '_train.hdf5'), n_read=n_train_read)
+    print("loading test data")
     test_dataset = Dataseth5py(os.path.join(data_dir, data_basename + '_test.hdf5'))
 
     kwargs = {}
