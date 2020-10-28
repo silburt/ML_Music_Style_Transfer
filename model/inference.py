@@ -49,7 +49,7 @@ class AudioSynthesizer():
                 onoff[i][np.setdiff1d(pianoroll[i].nonzero(), pianoroll[i-1].nonzero())] = 1 
         
         # process audio
-        audio, sr = librosa.core.load(audio_filename)
+        audio, sr = librosa.load(audio_filename)
         spec = librosa.stft(audio, n_fft=process_hp.n_fft, hop_length=process_hp.stride)
         magnitude = np.log1p(np.abs(spec)**2)
 
