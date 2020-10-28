@@ -14,9 +14,7 @@ import soundfile as sf
 from tqdm import tqdm
 import sys
 sys.path.append('../preprocessing/')
-from preprocess import hyperparams
-
-process_hp = hyperparams()
+from preprocess import process_spectrum_from_chunk
 
 
 class AudioSynthesizer():
@@ -50,13 +48,14 @@ class AudioSynthesizer():
         
         # process audio
         audio, sr = librosa.load(audio_filename)
-        spec = librosa.stft(audio, n_fft=process_hp.n_fft, hop_length=process_hp.stride)
-        magnitude = np.log1p(np.abs(spec)**2)
+        spec = process_spectrum_from_chunk(audio)
+        #spec = librosa.stft(audio, n_fft=process_hp.n_fft, hop_length=process_hp.stride)
+        #magnitude = np.log1p(np.abs(spec)**2)
 
         # convert to Tensors
         pianoroll = torch.cuda.FloatTensor(pianoroll)
         onoff = torch.cuda.FloatTensor(onoff)
-        spec = torch.cuda.FloatTensor(magnitude)
+        spec = torch.cuda.FloatTensor(spec)
         #X = torch.Tensor(score)
         #y = torch.Tensor(spec)
 
