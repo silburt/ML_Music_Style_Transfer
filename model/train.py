@@ -23,7 +23,6 @@ if torch.cuda.is_available():
 
 class hyperparams(object):
     def __init__(self, args):
-        self.instrument = args.instrument
         self.train_epoch = args.epochs
         self.test_freq = args.test_freq
         self.exp_name = args.exp_name
@@ -53,13 +52,15 @@ class Dataseth5py(torch.utils.data.Dataset):
             self.onoff = self.dataset['onoff'][:n_read]
             self.specs = {}
             for style in self.styles:
-                self.specs[style] = self.dataset[f'spec_{style}'][:n_read] 
+                print(f"loading style: {style}")
+                self.specs[style] = self.dataset[style][:n_read] 
         else:
             self.pianoroll = self.dataset['pianoroll'][:]
             self.onoff = self.dataset['onoff'][:]
             self.specs = {}
             for style in self.styles:
-                self.specs[style] = self.dataset[f'spec_{style}'][:]
+                print(f"loading style: {style}")
+                self.specs[style] = self.dataset[style][:]
 
         self.n_data = self.pianoroll.shape[0]
         random.seed(seed)
@@ -95,8 +96,8 @@ class Dataseth5py(torch.utils.data.Dataset):
 
 
 def Process_Data(data_dir, data_basename, n_train_read=None, batch_size=16):
-    train_dataset = Dataseth5py(os.path.join(data_dir, data_basename + '_train.h5py'), n_read=n_train_read)
-    test_dataset = Dataseth5py(os.path.join(data_dir, data_basename + '_test.h5py'))
+    train_dataset = Dataseth5py(os.path.join(data_dir, data_basename + '_train.hdf5'), n_read=n_train_read)
+    test_dataset = Dataseth5py(os.path.join(data_dir, data_basename + '_test.hdf5'))
 
     kwargs = {}
     train_loader = utils.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, **kwargs)

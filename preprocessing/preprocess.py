@@ -22,7 +22,7 @@ class hyperparams(object):
     def __init__(self):
         self.sr = 44100 # Sampling rate (samples per second)
         self.n_fft = 2048 # fft points (samples)
-        self.stride = 512 # number of windows of separation between chunks/data points
+        self.stride = 1024 # number of windows of separation between chunks/data points
 
         self.piano_scores = {
             'train': [1760, 2308, 2490, 2527],  # 2491 errors out, not sure why
@@ -39,7 +39,7 @@ hp = hyperparams()
 
 
 def process_spectrum_from_chunk(audio_chunk):
-    spec = librosa.stft(audio_chunk, n_fft=hp.n_fft, hop_length=hp.stride)
+    spec = librosa.stft(audio_chunk, n_fft=hp.n_fft, hop_length=hp.ws)
     magnitude = np.log1p(np.abs(spec)**2)
     return magnitude
 
@@ -48,16 +48,19 @@ def process_audio_into_chunks(audio, style, song_id, num_chunks, debug=False):
     print(f"processing {style} style for song_id {song_id}")
     spec_list=[]
     for step in range(num_chunks):
-        # get audio chunk
-        n_samples_per_chunk = hp.spc * hp.sr
+        # get audio chunk 
+        #n_samples_per_chunk = hp.spc * hp.sr   # this should work, but below has -1 (like pnet) to get correct dimension...
+        n_samples_per_chunk = (hp.spc * hp.wps - 1) * hp.ws
         audio_chunk = audio[(step * hp.ws * hp.stride): (step * hp.ws * hp.stride) + n_samples_per_chunk] 
         
         # check that the windowing alignment between midi/audio is correct
         if debug == True:
             io_manager.write_chunked_samples(DEBUG_DIR, song_id, step, hp, style=style, audio_chunk=audio_chunk)
         
-        # append to lists
-        spec_list.append(process_spectrum_from_chunk(audio_chunk))
+        # process spectrum and append
+        spec_chunk = process_spectrum_from_chunk(audio_chunk)
+        spec_list.append(spec_chunk)
+        
     return np.array(spec_list)
 
 
