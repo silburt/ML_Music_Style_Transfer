@@ -22,7 +22,7 @@ class hyperparams(object):
     def __init__(self):
         self.sr = 44100 # Sampling rate (samples per second)
         self.n_fft = 2048 # fft points (samples)
-        self.stride = 1024 # number of windows of separation between chunks/data points
+        self.stride = 256 # number of windows of separation between chunks/data points
 
         self.piano_scores = {
             'train': [1760, 2308, 2490, 2527],  # 2491 errors out, not sure why
