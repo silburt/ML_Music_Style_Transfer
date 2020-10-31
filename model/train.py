@@ -73,7 +73,7 @@ class Dataseth5py(torch.utils.data.Dataset):
         # piano
         pianoroll = self.pianoroll[index]
         onoff = self.onoff[index]
-        pianoroll = np.concatenate((pianoroll, onoff), axis = -1)
+        pianoroll = np.concatenate((pianoroll, onoff), axis=-1)
         pianoroll = np.transpose(pianoroll, (1, 0))
 
         # specs

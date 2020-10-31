@@ -8,6 +8,7 @@ import sys
 import argparse
 import os
 import glob
+import zipfile
 from utils import io_manager
 
 ROOT_DIR = '/Users/arisilburt/Machine_Learning/ML_Music_Style_Transfer/'
@@ -25,10 +26,13 @@ class hyperparams(object):
         self.stride = 512 # number of windows of separation between chunks/data points
 
         self.piano_scores = {
-            'train': [1760, 2308, 2490, 2527],  # 2491 errors out, not sure why
-            'test': [2533]
+            'train': [
+                2240, 2530, 1763, 2308, 2533, 1772, 2444, 2478, 
+                2509, 1776, 1749, 2486, 2487, 2678, 2490, 2492, 2527
+            ],  # 2491 errors out, not sure why
+            'test': [2533, 1760]
         }
-        self.styles = ['cuba', 'aliciakeys', 'gentleman', 'harpsichord', 'markisuitcase', 'upright']
+        self.styles = ['cuba', 'aliciakeys', 'gentleman', 'harpsichord', 'markisuitcase', 'upright', 'berlinbach']
         
         # A.S. each song is chopped into windows, and I *think* hop is the window length?
         self.ws = 256   # window size (audio samples per window)
@@ -144,12 +148,12 @@ def load_midi(data_dir, song_id, ext='mixcraft', debug=False):
     return pianoroll, onoff
 
 
-def get_data(data_dir, dataset_path_basename, data_type, debug=False):
+def get_data(data_dir, dataset_outpath, data_type, debug=False):
     '''
     Extract the desired solo data from the dataset.
     '''
     
-    h5pyname = f"{dataset_path_basename}_{data_type}.hdf5"
+    h5pyname = f"{dataset_outpath}_{data_type}.hdf5"
     with h5py.File(h5pyname, 'w') as h5py_data:
         data_manager = io_manager.h5pyManager(h5py_data)
 
@@ -180,15 +184,24 @@ def get_data(data_dir, dataset_path_basename, data_type, debug=False):
 
 
 def main(args):
-    get_data(args.data_dir, args.dataset_path_basename, args.data_type, args.debug)
+    # if data_dir is a zip file, extract
+    if zipfile.is_zipfile(args.data_dir) is True:
+        cwd = os.getcwd()
+        with zipfile.ZipFile(args.data_dir, 'r') as zip_ref:
+            root_data_dir = os.path.dirname(zip_ref.namelist()[0])
+            zip_ref.extractall(cwd)
+        args.data_dir = os.path.join(cwd, root_data_dir)
+
+    # get data
+    get_data(args.data_dir, args.dataset_outpath, args.data_type, args.debug)
    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-data-dir", type=str, default=f'{ROOT_DIR}/data/style_transfer_train', 
-                        help="directory where dataset is is")
-    parser.add_argument("-dataset-path-basename", type=str, default=f'{ROOT_DIR}/preprocessing/data_products/style_transfer', 
-                        help="basename for storing results (data-type will be appended as well)")
+                        help="directory where dataset is is. Can also specify a zipfile which will be extracted")
+    parser.add_argument("-dataset-outpath", type=str, default=f'{ROOT_DIR}/preprocessing/data_products/style_transfer', 
+                        help="location to store results (data-type will be appended as well)")
     parser.add_argument("-data-type", type=str, default='train', choices=['train', 'test'],
                         help="type of data you are generating (train/test)")                                         
     parser.add_argument("--debug", type=io_manager.str2bool, default=False, 

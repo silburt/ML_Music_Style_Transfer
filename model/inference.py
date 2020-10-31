@@ -47,6 +47,8 @@ class AudioSynthesizer():
             else:
                 onoff[i][np.setdiff1d(pianoroll[i-1].nonzero(), pianoroll[i].nonzero())] = -1
                 onoff[i][np.setdiff1d(pianoroll[i].nonzero(), pianoroll[i-1].nonzero())] = 1 
+        pianoroll = np.transpose(pianoroll, (1, 0))
+        onoff = np.transpose(onoff, (1, 0))
         
         # process audio
         audio, sr = librosa.load(audio_filename, sr=preprocess_hp.sr)
@@ -55,17 +57,17 @@ class AudioSynthesizer():
         #magnitude = np.log1p(np.abs(spec)**2)
 
         # convert to Tensors
-        pianoroll = torch.cuda.FloatTensor(pianoroll)
-        onoff = torch.cuda.FloatTensor(onoff)
-        spec = torch.cuda.FloatTensor(spec)
+        pianoroll = torch.cuda.FloatTensor(pianoroll).unsqueeze(0)
+        onoff = torch.cuda.FloatTensor(onoff).unsqueeze(0)
+        spec = torch.cuda.FloatTensor(spec).unsqueeze(0)
         #X = torch.Tensor(score)
         #y = torch.Tensor(spec)
 
         # reshape into a batch with proper dims
         # TODO: Make this better...
-        pianoroll = pianoroll[:860, :128].unsqueeze(0)
-        onoff = onoff[:860, :128].unsqueeze(0)
-        spec = spec[:1025, :860].unsqueeze(0)
+        #pianoroll = pianoroll[:128, :860]
+        #onoff = onoff[:128, :860]
+        #spec = spec[:1025, :860]
         return pianoroll, onoff, spec
 
 
