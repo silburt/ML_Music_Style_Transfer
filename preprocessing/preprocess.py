@@ -32,7 +32,9 @@ class hyperparams(object):
             ],  # 2491 errors out, not sure why
             'test': [2533, 1760]
         }
-        self.styles = ['cuba', 'aliciakeys', 'gentleman', 'harpsichord', 'markisuitcase', 'upright', 'berlinbach']
+        # additional styles - 'markisuitcase', 'wurlycrunchymellow'
+        self.styles = ['cuba', 'aliciakeys', 'gentleman', 'harpsichord', 'upright', 'berlinbach']
+
         
         # A.S. each song is chopped into windows, and I *think* hop is the window length?
         self.ws = 256   # window size (audio samples per window)
@@ -106,7 +108,7 @@ def load_audio(data_dir, song_id, style, debug=False):
     return y
 
 
-def get_num_song_chunks(pianoroll, offset_percentage=0.1):
+def get_num_song_chunks(pianoroll, offset_percentage=0.1, max_chunks=100):
     '''
     Get number of chunks in the song. 
     - offset_percentage is to allow a bit of wiggle room to make sure we dont accidentally run off the end. Some of the audio/midi
@@ -120,6 +122,9 @@ def get_num_song_chunks(pianoroll, offset_percentage=0.1):
     
     offset = int(offset_percentage * num_chunks)
     num_chunks -= offset
+    if num_chunks > max_chunks:
+        print(f"song has more than max_chunks={max_chunks}, reducing")
+        num_chunks = max_chunks
     print('song has {} chunks'.format(num_chunks))
     return num_chunks
 
