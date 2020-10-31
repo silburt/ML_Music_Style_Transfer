@@ -12,7 +12,7 @@ import zipfile
 from utils import io_manager
 
 ROOT_DIR = '/Users/arisilburt/Machine_Learning/ML_Music_Style_Transfer/'
-DEBUG_DIR = f'{ROOT_DIR}/preprocessing/debugdir'
+DEBUG_DIR = f'debugdir'
 
 class hyperparams(object):
     '''
@@ -170,7 +170,12 @@ def get_data(data_dir, dataset_outpath, data_type, debug=False):
 
             for style in hp.styles:
                 # load audio
-                audio = load_audio(data_dir, song_id, style, debug=debug)
+                try:
+                    audio = load_audio(data_dir, song_id, style, debug=debug)
+                except:
+                    # not all styles exist for all midi...
+                    print(f"Couldnt load audio for song={song_id}, style={style}, skipping...")
+                    continue
 
                 # process into chunks
                 spec_list = process_audio_into_chunks(audio, style, song_id, num_chunks, debug=debug)
@@ -186,6 +191,7 @@ def get_data(data_dir, dataset_outpath, data_type, debug=False):
 def main(args):
     # if data_dir is a zip file, extract
     if zipfile.is_zipfile(args.data_dir) is True:
+        print("Extracting zip file to local")
         cwd = os.getcwd()
         with zipfile.ZipFile(args.data_dir, 'r') as zip_ref:
             root_data_dir = os.path.dirname(zip_ref.namelist()[0])
