@@ -207,10 +207,12 @@ class PerformanceNet(nn.Module):
         self.down_convs_audio = nn.ModuleList(self.down_convs_audio)
 
         # dense layers 
-        in_channels = 4096 * 2
-        intermediate_channels = int(4096 * 1.5)
-        out_channels = 4096
-        self.dense_concat = DenseConcat(in_channels, intermediate_channels, out_channels)
+        # in_channels, intermediate_channels, out_channels
+        self.dense_concats = []
+        self.dense_concats.append(DenseConcat(4096 * 2, int(4096 * 1.5), 4096)) 
+        self.dense_concats.append(DenseConcat(2048 * 2, int(2048 * 1.5), 2048))
+        self.dense_concats.append(DenseConcat(1024 * 2, int(1024 * 1.5), 1024))
+        self.dense_concats.append(DenseConcat(512 * 2, int(512 * 1.5), 512))
 
         # up convs
         self.up_convs = []
@@ -256,8 +258,11 @@ class PerformanceNet(nn.Module):
 
         # audio spectrograms - standard convnets
         # TODO: mel-spectrograms instead, and more traditional convolutions
+        # TODO: finish the unet architecture where you save and merge the audio spectrogram
+        encoder_layer_outputs_audio = []
         for i, module in enumerate(self.down_convs_audio):
-            x_audio, before_pool = module(x_audio)
+            x_audio, before_pool_audio = module(x_audio)
+            encoder_layer_outputs_audio.append(before_pool_audio)
 
         # concat with dense layers - x output is same as x_midi
         x = self.dense_concat(x_midi, x_audio)
@@ -266,7 +271,11 @@ class PerformanceNet(nn.Module):
 
         # deconv
         for i, module in enumerate(self.up_convs):
-            before_pool = encoder_layer_outputs_midi[-(i+2)]     # this is the skip-connection from the earlier part of the U-net
+            # get skip-connections from the earlier part of the U-net, merge
+            before_pool_midi = encoder_layer_outputs_midi[-(i+2)]     
+            before_pool_audio = encoder_layer_outputs_audio[-(i+2)]
+            before_pool = self.dense_concat(before_pool_midi, before_pool_audio)
+
             if i < self.onset_offset_encoder.depth - 1:
                 x = module(before_pool, x, Onoff_Conditions[i-1])            
             else:
