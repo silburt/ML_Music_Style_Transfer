@@ -98,9 +98,9 @@ class Dataseth5py(torch.utils.data.Dataset):
 
 def Process_Data(data_dir, n_train_read=None, n_test_read=None, batch_size=16):
     print("loading training data")
-    train_dataset = Dataseth5py(os.path.join(data_dir, '_train.hdf5'), n_read=n_train_read)
+    train_dataset = Dataseth5py(data_dir + '_train.hdf5', n_read=n_train_read)
     print("loading test data")
-    test_dataset = Dataseth5py(os.path.join(data_dir, '_test.hdf5'), n_read=n_test_read)
+    test_dataset = Dataseth5py(data_dir + '_test.hdf5', n_read=n_test_read)
 
     kwargs = {}
     train_loader = utils.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, **kwargs)
