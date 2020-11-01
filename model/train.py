@@ -96,11 +96,11 @@ class Dataseth5py(torch.utils.data.Dataset):
         return self.n_data
 
 
-def Process_Data(data_dir, data_basename, n_train_read=None, batch_size=16):
+def Process_Data(data_dir, n_train_read=None, n_test_read=None, batch_size=16):
     print("loading training data")
-    train_dataset = Dataseth5py(os.path.join(data_dir, data_basename + '_train.hdf5'), n_read=n_train_read)
+    train_dataset = Dataseth5py(os.path.join(data_dir, '_train.hdf5'), n_read=n_train_read)
     print("loading test data")
-    test_dataset = Dataseth5py(os.path.join(data_dir, data_basename + '_test.hdf5'))
+    test_dataset = Dataseth5py(os.path.join(data_dir, '_test.hdf5'), n_read=n_test_read)
 
     kwargs = {}
     train_loader = utils.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, **kwargs)
@@ -174,8 +174,7 @@ def main(args):
     model.zero_grad()
     optimizer.zero_grad()
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
-    train_loader, test_loader = Process_Data(args.data_dir, args.dataset_basename, n_train_read=args.n_train_read, 
-                                             batch_size=args.batch_size)
+    train_loader, test_loader = Process_Data(args.data_dir, n_train_read=args.n_train_read, n_test_read=args.n_test_read, batch_size=args.batch_size)
     print ('start training')
     for epoch in range(hp.train_epoch):
         loss = train(model, epoch, train_loader, optimizer, hp.iter_train_loss)
@@ -197,11 +196,11 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-data-dir", type=str, default='/Users/arisilburt/Machine_Learning/music/PerformanceNet_ari/data/', help="directory where data is")
-    parser.add_argument("-dataset-basename", type=str, default='style_transfer', help="basename of train/test data h5py file")
     parser.add_argument("-epochs", type=int, default=1)
     parser.add_argument("-test-freq", type=int, default=1, help='how many epochs between running against test data')
     parser.add_argument("-exp-name", type=str, default='piano_test')
     parser.add_argument("--n-train-read", type=int, default=None, help='How many data points to read (length of an epoch)')
+    parser.add_argument("--n-test-read", type=int, default=None, help='How many data points to read (length of an epoch)')
     parser.add_argument("--batch-size", type=int, default=16)
     args = parser.parse_args()
     
