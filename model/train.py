@@ -36,7 +36,7 @@ class hyperparams(object):
 
 class Dataseth5py(torch.utils.data.Dataset):
     # https://discuss.pytorch.org/t/how-to-speed-up-the-data-loader/13740/3
-    def __init__(self, in_file, seed=42, n_read=None):
+    def __init__(self, in_file, seed=42, n_read=None, n_read_memory=None):
         super(Dataseth5py, self).__init__()
 
         self.dataset = h5py.File(in_file, 'r')

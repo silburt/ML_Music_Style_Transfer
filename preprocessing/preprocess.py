@@ -32,8 +32,8 @@ class hyperparams(object):
             ],  # 2491 errors out, not sure why
             'test': [2533, 1760]
         }
-        # additional styles - 'markisuitcase', 'wurlycrunchymellow'
-        self.styles = ['cuba', 'aliciakeys', 'gentleman', 'harpsichord', 'upright', 'berlinbach']
+        # additional styles - 'markisuitcase', 'wurlycrunchymellow', 'berlinbach'
+        self.styles = ['cuba', 'aliciakeys', 'gentleman', 'harpsichord', 'upright']
 
         
         # A.S. each song is chopped into windows, and I *think* hop is the window length?
@@ -213,6 +213,8 @@ if __name__ == "__main__":
                         help="directory where dataset is is. Can also specify a zipfile which will be extracted")
     parser.add_argument("-dataset-outpath", type=str, default=f'{ROOT_DIR}/preprocessing/data_products/style_transfer', 
                         help="location to store results (data-type will be appended as well)")
+    parser.add_argument("-max-chunks-per-song", type=int, default=100, 
+                        help="max number of chunks per song (limiting dataset size)")
     parser.add_argument("-data-type", type=str, default='train', choices=['train', 'test'],
                         help="type of data you are generating (train/test)")                                         
     parser.add_argument("--debug", type=io_manager.str2bool, default=False, 
