@@ -97,15 +97,15 @@ class DenseConcat(nn.Module):
         super(DenseConcat, self).__init__()
         self.fc1 = nn.Linear(in_channels, intermediate_channels)
         self.fc2 = nn.Linear(intermediate_channels, out_channels)
+        self.dropout = nn.Dropout(p=0.2)
 
     def forward(self, midi_embed, audio_embed):
         # TODO: add some dropout
-        # TODO: I think you need to concat on the second dimension and revamp this...
-        x = torch.cat((audio_embed, midi_embed), 2)
-        #x = x.transpose(1, 2)
+        x = torch.cat((audio_embed, midi_embed), 1)
         x = F.relu(self.fc1(x))
+        x = self.dropout(x)
         x = F.relu(self.fc2(x))
-        #x = x.transpose(2, 1)
+        x = x.transpose(2, 1)
         return x
 
 
@@ -179,7 +179,6 @@ class PerformanceNet(nn.Module):
     def __init__(self, depth=5, start_channels=128, start_audio_channels=1025):
         super(PerformanceNet, self).__init__()
         self.depth = depth
-        self.audio_depth = self.depth - 3   # memory restrictions at the moment
         self.start_channels = start_channels 
         self.start_audio_channels = start_audio_channels
         self.construct_layers()
@@ -188,20 +187,24 @@ class PerformanceNet(nn.Module):
     #@staticmethod  
     def construct_layers(self):
         # down convs
+        outs_channel_list_midi = []
         self.down_convs = []
         for i in range(self.depth):
             ins = self.start_channels if i == 0 else outs
             outs = self.start_channels * (2 ** (i+1))
+            outs_channel_list_midi.append(outs)     # keep track of outs
             pooling = True if i < self.depth-1 else False
             DC = DownConv(ins, outs, pooling=pooling, block_id=i)
             self.down_convs.append(DC)  
         self.down_convs = nn.ModuleList(self.down_convs)
         
         # down convs audio
+        outs_channel_list_audio = [int(1024*1.5), 2048, int(2048*1.5), 4096, int(4096*1.5)]
         self.down_convs_audio = []
         for i in range(self.depth):
             ins = self.start_audio_channels if i == 0 else outs
-            outs = min(self.start_audio_channels * (2 ** (i+1)), 4096)
+            outs = outs_channel_list_audio[i]
+            #outs = min(self.start_audio_channels * (2 ** (i+1)), 4096)
             pooling = True if i < self.depth-1 else False
             DC = DownConv(ins, outs, pooling=pooling, block_id=i)
             self.down_convs_audio.append(DC)  
@@ -210,10 +213,14 @@ class PerformanceNet(nn.Module):
         # dense layers 
         # in_channels, intermediate_channels, out_channels
         self.dense_concats = []
-        self.dense_concats.append(DenseConcat(4096 * 2, int(4096 * 1.5), 4096)) 
-        self.dense_concats.append(DenseConcat(2048 * 2, int(2048 * 1.5), 2048))
-        self.dense_concats.append(DenseConcat(1024 * 2, int(1024 * 1.5), 1024))
-        self.dense_concats.append(DenseConcat(512 * 2, int(512 * 1.5), 512))
+        for i in range(self.depth):
+            out_midi = outs_channel_list_midi[-(i+1)]
+            out_audio = outs_channel_list_audio[-(i+1)]
+            self.dense_concats.append(DenseConcat(out_midi + out_audio, int(out_midi * 1.5), out_midi)) 
+        # self.dense_concats.append(DenseConcat(4096 * 2, int(4096 * 1.5), 4096)) 
+        # self.dense_concats.append(DenseConcat(2048 * 2, int(2048 * 1.5), 2048))
+        # self.dense_concats.append(DenseConcat(1024 * 2, int(1024 * 1.5), 1024))
+        # self.dense_concats.append(DenseConcat(512 * 2, int(512 * 1.5), 512))
         self.dense_concats = nn.ModuleList(self.dense_concats)
 
         # up convs

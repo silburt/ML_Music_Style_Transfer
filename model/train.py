@@ -120,7 +120,8 @@ def train(model, epoch, train_loader, optimizer, iter_train_loss):
     for batch_idx, (data, data_cond, target) in enumerate(train_loader):        
         optimizer.zero_grad()
         split = torch.split(data, 128, dim=1)
-        loss_function = nn.MSELoss()
+        #loss_function = nn.MSELoss()
+        loss_function = nn.L1Loss()
         if CUDA_FLAG == 1:
             y_pred = model(split[0].cuda(), data_cond.cuda(), split[1].cuda())
             loss = loss_function(y_pred, target.cuda())
