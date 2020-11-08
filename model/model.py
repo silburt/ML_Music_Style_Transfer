@@ -100,11 +100,12 @@ class DenseConcat(nn.Module):
 
     def forward(self, midi_embed, audio_embed):
         # TODO: add some dropout
-        x = torch.cat((audio_embed, midi_embed), 1)
-        x = x.transpose(1, 2)
+        # TODO: I think you need to concat on the second dimension and revamp this...
+        x = torch.cat((audio_embed, midi_embed), 2)
+        #x = x.transpose(1, 2)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        x = x.transpose(2, 1)
+        #x = x.transpose(2, 1)
         return x
 
 
@@ -213,6 +214,7 @@ class PerformanceNet(nn.Module):
         self.dense_concats.append(DenseConcat(2048 * 2, int(2048 * 1.5), 2048))
         self.dense_concats.append(DenseConcat(1024 * 2, int(1024 * 1.5), 1024))
         self.dense_concats.append(DenseConcat(512 * 2, int(512 * 1.5), 512))
+        self.dense_concats = nn.ModuleList(self.dense_concats)
 
         # up convs
         self.up_convs = []
@@ -272,7 +274,7 @@ class PerformanceNet(nn.Module):
         for i, module in enumerate(self.up_convs):
             # get skip-connections from the earlier part of the U-net, merge
 
-            before_pool_midi = encoder_layer_outputs_midi[-(i+2)]     
+            before_pool_midi = encoder_layer_outputs_midi[-(i+2)]
             before_pool_audio = encoder_layer_outputs_audio[-(i+2)]
             before_pool = self.dense_concats[i+1](before_pool_midi, before_pool_audio)
 

@@ -45,11 +45,11 @@ hp = hyperparams()
 
 
 def process_spectrum_from_chunk(audio_chunk):
-    #spec = librosa.stft(audio_chunk, n_fft=hp.n_fft, hop_length=hp.ws)
-    #magnitude = np.log1p(np.abs(spec)**2)
+    spec = librosa.stft(audio_chunk, n_fft=hp.n_fft, hop_length=hp.ws)
+    magnitude = np.log1p(np.abs(spec)**2)
     
     # https://medium.com/analytics-vidhya/understanding-the-mel-spectrogram-fca2afa2ce53
-    magnitude = librosa.feature.melspectrogram(y=audio_chunk, sr=hp.sr, n_fft=hp.n_fft, hop_length=hp.ws)
+    #magnitude = librosa.feature.melspectrogram(y=audio_chunk, sr=hp.sr, n_fft=hp.n_fft, hop_length=hp.ws)
     return magnitude
 
 
