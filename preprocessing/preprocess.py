@@ -32,8 +32,8 @@ class hyperparams(object):
             ],  # 2491 errors out, not sure why
             'test': [2533, 1760]
         }
-        # additional styles - 'markisuitcase', 'wurlycrunchymellow'
-        self.styles = ['cuba', 'aliciakeys', 'gentleman', 'harpsichord', 'upright', 'berlinbach']
+        # additional styles - 'markisuitcase', 'wurlycrunchymellow', 'berlinbach'
+        self.styles = ['cuba', 'aliciakeys', 'gentleman', 'harpsichord', 'upright']
 
         
         # A.S. each song is chopped into windows, and I *think* hop is the window length?
@@ -45,8 +45,11 @@ hp = hyperparams()
 
 
 def process_spectrum_from_chunk(audio_chunk):
-    spec = librosa.stft(audio_chunk, n_fft=hp.n_fft, hop_length=hp.ws)
-    magnitude = np.log1p(np.abs(spec)**2)
+    #spec = librosa.stft(audio_chunk, n_fft=hp.n_fft, hop_length=hp.ws)
+    #magnitude = np.log1p(np.abs(spec)**2)
+    
+    # https://medium.com/analytics-vidhya/understanding-the-mel-spectrogram-fca2afa2ce53
+    magnitude = librosa.feature.melspectrogram(y=audio_chunk, sr=hp.sr, n_fft=hp.n_fft, hop_length=hp.ws)
     return magnitude
 
 

@@ -108,6 +108,12 @@ def Process_Data(data_dir, n_train_read=None, n_test_read=None, batch_size=16):
     return train_loader, test_loader
 
 
+def engel_loss(pred, target, alpha=1.0):
+    # loss from https://arxiv.org/abs/2001.04643
+    loss_1 = nn.L1Loss()(pred, target)
+    loss_2 = 
+    return loss_1 + loss_2
+
 def train(model, epoch, train_loader, optimizer, iter_train_loss):
     model.train()
     train_loss = 0

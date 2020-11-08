@@ -256,8 +256,7 @@ class PerformanceNet(nn.Module):
             x_midi, before_pool = module(x_midi)
             encoder_layer_outputs_midi.append(before_pool)
 
-        # audio spectrograms - standard convnets
-        # TODO: mel-spectrograms instead, and more traditional convolutions
+        # audio spectrograms - I believe they are mel-spectrograms - standard convnets
         # TODO: finish the unet architecture where you save and merge the audio spectrogram
         encoder_layer_outputs_audio = []
         for i, module in enumerate(self.down_convs_audio):
@@ -265,16 +264,17 @@ class PerformanceNet(nn.Module):
             encoder_layer_outputs_audio.append(before_pool_audio)
 
         # concat with dense layers - x output is same as x_midi
-        x = self.dense_concat(x_midi, x_audio)
+        x = self.dense_concats[0](x_midi, x_audio)
 
         Onoff_Conditions = self.onset_offset_encoder(cond)
 
         # deconv
         for i, module in enumerate(self.up_convs):
             # get skip-connections from the earlier part of the U-net, merge
+
             before_pool_midi = encoder_layer_outputs_midi[-(i+2)]     
             before_pool_audio = encoder_layer_outputs_audio[-(i+2)]
-            before_pool = self.dense_concat(before_pool_midi, before_pool_audio)
+            before_pool = self.dense_concats[i+1](before_pool_midi, before_pool_audio)
 
             if i < self.onset_offset_encoder.depth - 1:
                 x = module(before_pool, x, Onoff_Conditions[i-1])            
