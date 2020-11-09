@@ -100,11 +100,10 @@ class DenseConcat(nn.Module):
         self.dropout = nn.Dropout(p=0.2)
 
     def forward(self, midi_embed, audio_embed):
-        # TODO: add some dropout
         x = torch.cat((audio_embed, midi_embed), 1)
-        x = F.relu(self.fc1(x))
-        #x = self.dropout(x)
-        x = F.relu(self.fc2(x))
+        x = x.transpose(1, 2)
+        x = self.dropout(F.relu(self.fc1(x)))
+        x = self.dropout(F.relu(self.fc2(x)))
         x = x.transpose(2, 1)
         return x
 
@@ -199,7 +198,9 @@ class PerformanceNet(nn.Module):
         self.down_convs = nn.ModuleList(self.down_convs)
         
         # down convs audio
-        outs_channel_list_audio = [int(1024*1.5), 2048, int(2048*1.5), 4096, int(4096*1.5)]
+        outs_channel_list_audio = [
+            int(1024*1.5), 2048, int(2048*1.5), 4096, int(4096*1.5)
+        ]
         self.down_convs_audio = []
         for i in range(self.depth):
             ins = self.start_audio_channels if i == 0 else outs
