@@ -47,8 +47,8 @@ class AudioSynthesizer():
     def __init__(self, checkpoint, exp_dir, midi_source, audio_source):
         self.exp_dir = exp_dir
         self.checkpoint = torch.load(os.path.join(exp_dir, checkpoint))
-        self.sample_rate = preprocess_hp.sr
-        self.wps = preprocess_hp.wps
+        self.sample_rate = pp_hp.sr
+        self.wps = pp_hp.wps
         self.midi_source = midi_source
         self.audio_source = audio_source
                 
@@ -75,7 +75,7 @@ class AudioSynthesizer():
         onoff = np.transpose(onoff, (1, 0))
         
         # process audio
-        audio, sr = librosa.load(audio_filename, sr=preprocess_hp.sr)
+        audio, sr = librosa.load(audio_filename, sr=pp_hp.sr)
         spec = process_spectrum_from_chunk(audio)
         #spec = librosa.stft(audio, n_fft=process_hp.n_fft, hop_length=process_hp.stride)
         #magnitude = np.log1p(np.abs(spec)**2)
