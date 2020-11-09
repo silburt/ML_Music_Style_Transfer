@@ -1,3 +1,11 @@
+'''
+function ClickConnect(){
+console.log("Clicking");
+document.querySelector("colab-connect-button").click()
+}
+setInterval(ClickConnect,100000)
+'''
+
 import torch
 import torch.nn as nn
 from torch.nn import init

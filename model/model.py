@@ -103,7 +103,7 @@ class DenseConcat(nn.Module):
         # TODO: add some dropout
         x = torch.cat((audio_embed, midi_embed), 1)
         x = F.relu(self.fc1(x))
-        x = self.dropout(x)
+        #x = self.dropout(x)
         x = F.relu(self.fc2(x))
         x = x.transpose(2, 1)
         return x
