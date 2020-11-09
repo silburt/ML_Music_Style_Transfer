@@ -16,7 +16,31 @@ import sys
 sys.path.append('../preprocessing/')
 from preprocess import process_spectrum_from_chunk, hyperparams
 
-preprocess_hp = hyperparams()
+pp_hp = hyperparams()
+
+# def _griffinlim(spectrogram, audio_id, n_iter=300, window='hann', n_fft=2048, hop_length=256, verbose=False):
+#     print ('Synthesizing audio {}'.format(audio_id))
+
+#     if hop_length == -1:
+#         hop_length = n_fft // 4
+#         spectrogram[0:5] = 0
+
+#     spectrogram[150:] = 0
+#     angles = np.exp(2j * np.pi * np.random.rand(*spectrogram.shape))
+#     t = tqdm(range(n_iter), ncols=100, mininterval=2.0, disable=not verbose)
+#     for i in t:
+#         full = np.abs(spectrogram).astype(np.complex) * angles
+#         inverse = librosa.istft(full, hop_length = hop_length, window = window)
+#         rebuilt = librosa.stft(inverse, n_fft = n_fft, hop_length = hop_length, window = window)
+#         angles = np.exp(1j * np.angle(rebuilt))
+
+#         if verbose:
+#             diff = np.abs(spectrogram) - np.abs(rebuilt)
+#             t.set_postfix(loss=np.linalg.norm(diff, 'fro'))
+
+#     full = np.abs(spectrogram).astype(np.complex) * angles
+#     inverse = librosa.istft(full, hop_length = hop_length, window = window)
+#     return inverse
 
 
 class AudioSynthesizer():
@@ -102,32 +126,11 @@ class AudioSynthesizer():
                 dir_id += 1
         return audio_out_dir
 
-    def griffinlim(self, spectrogram, audio_id, n_iter = 300, window = 'hann', n_fft = 2048, hop_length = 256, verbose = False):
-        
-        print ('Synthesizing audio {}'.format(audio_id))
-
-        if hop_length == -1:
-            hop_length = n_fft // 4
-            spectrogram[0:5] = 0
-
-        spectrogram[150:] = 0
-        angles = np.exp(2j * np.pi * np.random.rand(*spectrogram.shape))
-
-        t = tqdm(range(n_iter), ncols=100, mininterval=2.0, disable=not verbose)
-        for i in t:
-            full = np.abs(spectrogram).astype(np.complex) * angles
-            inverse = librosa.istft(full, hop_length = hop_length, window = window)
-            rebuilt = librosa.stft(inverse, n_fft = n_fft, hop_length = hop_length, window = window)
-            angles = np.exp(1j * np.angle(rebuilt))
-
-            if verbose:
-                diff = np.abs(spectrogram) - np.abs(rebuilt)
-                t.set_postfix(loss=np.linalg.norm(diff, 'fro'))
-
-        full = np.abs(spectrogram).astype(np.complex) * angles
-        inverse = librosa.istft(full, hop_length = hop_length, window = window)
-
-        return inverse
+    def griffinlim(self, spectrogram, audio_id, n_iter=300, window='hann', n_fft=2048, hop_length=256, verbose=False):
+        # from test_griffinlim.py this seems to work well
+        magnitude = np.sqrt(np.expm1(spectrogram))
+        return librosa.griffinlim(magnitude, n_iter=n_iter, window=window, win_length=n_fft, hop_length=hop_length)
+        #return _griffinlim(spectrogram, audio_id, n_iter=300, window='hann', n_fft=2048, hop_length=256, verbose=False)
 
 
 def main():
