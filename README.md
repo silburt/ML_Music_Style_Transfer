@@ -57,3 +57,6 @@ STRUCTURED AUTOMATIC MUSIC](https://arxiv.org/pdf/1806.09905.pdf) - this may be 
 - [analyticsvidhya music generation](https://www.analyticsvidhya.com/blog/2020/01/how-to-perform-automatic-music-generation/)
 - [Sander Dielemann blog post](https://benanne.github.io/2020/03/24/audio-generation.html)
 - [local vs. global conditioning github issue](https://github.com/ibab/tensorflow-wavenet/issues/112)
+
+### Tips and tricks
+- [this video](https://www.youtube.com/watch?v=Z7YM-HAz-IY&ab_channel=SethAdams) - downsample audio so that nyquist frequency is lower, and thus naturally remove some of the high frequency noise.

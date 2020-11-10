@@ -116,11 +116,12 @@ def Process_Data(data_dir, n_train_read=None, n_test_read=None, batch_size=16):
     return train_loader, test_loader
 
 
-# def engel_loss(pred, target, alpha=1.0):
-#     # loss from https://arxiv.org/abs/2001.04643
-#     loss_1 = nn.L1Loss()(pred, target)
-#     loss_2 = 
-#     return loss_1 + loss_2
+def engel_loss(pred, target):
+    # loss from https://arxiv.org/abs/2001.04643
+    loss_1 = nn.L1Loss()(pred, target)
+    loss_2 = nn.L1Loss()(torch.log1p(pred), torch.log1p(target))
+    return loss_1 + loss_2
+
 
 def train(model, epoch, train_loader, optimizer, iter_train_loss):
     model.train()
@@ -128,14 +129,15 @@ def train(model, epoch, train_loader, optimizer, iter_train_loss):
     for batch_idx, (data, data_cond, target) in enumerate(train_loader):        
         optimizer.zero_grad()
         split = torch.split(data, 128, dim=1)
-        #loss_function = nn.MSELoss()
-        loss_function = nn.L1Loss()
+        #loss_function = nn.L1Loss()
         if CUDA_FLAG == 1:
             y_pred = model(split[0].cuda(), data_cond.cuda(), split[1].cuda())
-            loss = loss_function(y_pred, target.cuda())
+            #loss = loss_function(y_pred, target.cuda())
+            loss = engel_loss(y_pred, target.cuda())
         else:
             y_pred = model(split[0], data_cond, split[1]) 
-            loss = loss_function(y_pred, target)
+            #loss = loss_function(y_pred, target)
+            loss = engel_loss(y_pred, target)
         
         loss.backward()
         iter_train_loss.append(loss.item())

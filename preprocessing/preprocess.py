@@ -21,7 +21,7 @@ class hyperparams(object):
         - chunk: the entire pianoroll segment that will constitude a data point (X windows make a chunk)
     '''
     def __init__(self):
-        self.sr = 44100 # Sampling rate (samples per second)
+        self.sr = 44100 // 2 # Sampling rate (samples per second)
         self.n_fft = 2048 # fft points (samples)
         self.stride = 512 # number of windows of separation between chunks/data points
 
@@ -34,32 +34,30 @@ class hyperparams(object):
         }
         # additional styles - 'markisuitcase', 'wurlycrunchymellow', 'berlinbach'
         self.styles = ['cuba', 'aliciakeys', 'gentleman', 'harpsichord', 'upright']
-
         
         # A.S. each song is chopped into windows, and I *think* hop is the window length?
         self.ws = 256   # window size (audio samples per window)
-        self.wps = 44100 // self.ws # ~172 windows/second
+        self.wps = self.sr // self.ws # ~86 windows/second
         self.spc = 5    # seconds per chunk
 
 hp = hyperparams()
 
 
 def process_spectrum_from_chunk(audio_chunk):
+    # target - this can properly convert back to audio with griffinlim
     spec = librosa.stft(audio_chunk, n_fft=hp.n_fft, hop_length=hp.ws)
-    magnitude = np.log1p(np.abs(spec)**2)
-
-    # this properly converts back to audio with griffinlim
-    #magnitude = np.abs(spec)
+    target = np.abs(spec)
 
     # https://medium.com/analytics-vidhya/understanding-the-mel-spectrogram-fca2afa2ce53
     #magnitude = librosa.feature.melspectrogram(y=audio_chunk, sr=hp.sr, n_fft=hp.n_fft, hop_length=hp.ws)
-    #magnitude = librosa.feature.mfcc(y=audio_chunk, sr=hp.sr, S=None, n_mfcc=20)
-    return magnitude
+    mfcc = librosa.feature.mfcc(y=audio_chunk, sr=hp.sr, S=None, n_mfcc=12)
+    return mfcc, target
 
 
 def process_audio_into_chunks(audio, style, song_id, num_chunks, debug=False):
     print(f"processing {style} style for song_id {song_id}")
     spec_list=[]
+    target_list = []
     for step in range(num_chunks):
         # get audio chunk 
         #n_samples_per_chunk = hp.spc * hp.sr   # this should work, but below has -1 (like pnet) to get correct dimension...
@@ -71,10 +69,10 @@ def process_audio_into_chunks(audio, style, song_id, num_chunks, debug=False):
             io_manager.write_chunked_samples(DEBUG_DIR, song_id, step, hp, style=style, audio_chunk=audio_chunk)
         
         # process spectrum and append
-        spec_chunk = process_spectrum_from_chunk(audio_chunk)
+        spec_chunk, target_chunk = process_spectrum_from_chunk(audio_chunk)
         spec_list.append(spec_chunk)
-        
-    return np.array(spec_list)
+        target_list.append(target_chunk)
+    return np.array(spec_list), np.array(target_list)
 
 
 def process_pianoroll_into_chunks(pianoroll, onoff, song_id, num_chunks, debug=False):
@@ -190,10 +188,10 @@ def get_data(data_dir, dataset_outpath, data_type, debug=False):
                     continue
 
                 # process into chunks
-                spec_list = process_audio_into_chunks(audio, style, song_id, num_chunks, debug=debug)
+                spec_list, target_list = process_audio_into_chunks(audio, style, song_id, num_chunks, debug=debug)
                 
                 # write
-                data_manager.write_spectrum(spec_list, style)
+                data_manager.write_spectrum(spec_list, target_list, style)
 
                 if debug is True:
                     assert pianoroll_list.shape[0] == spec_list.shape[0]

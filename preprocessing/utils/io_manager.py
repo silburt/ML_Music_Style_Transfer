@@ -51,8 +51,8 @@ class h5pyManager():
         # TODO: find out elegant chunking - different songs have different numbers of chunks
         if 'pianoroll' not in self.data:
             # create
-            self.data.create_dataset("pianoroll", data=pianoroll_list, dtype='float64', maxshape=(None,) + pianoroll_list.shape[1:], chunks=True) 
-            self.data.create_dataset("onoff", data=onoff_list, dtype='float64', maxshape=(None,) + onoff_list.shape[1:], chunks=True) 
+            self.data.create_dataset("pianoroll", data=pianoroll_list, dtype='float32', maxshape=(None,) + pianoroll_list.shape[1:], chunks=True) 
+            self.data.create_dataset("onoff", data=onoff_list, dtype='float32', maxshape=(None,) + onoff_list.shape[1:], chunks=True) 
         else:
             # append
             self.data["pianoroll"].resize(self.data["pianoroll"].shape[0] + pianoroll_list.shape[0], axis=0)
@@ -61,17 +61,21 @@ class h5pyManager():
             self.data["onoff"].resize(self.data["onoff"].shape[0] + onoff_list.shape[0], axis=0)
             self.data["onoff"][-onoff_list.shape[0]:] = onoff_list
 
-    def write_spectrum(self, spec_list, style):
+    def write_spectrum(self, spec_list, target_list, style):
         '''
         Create and incrementally add to an h5py file, so you don't have to fit everything into memory
         '''
-        # TODO: find out elegant chunking - different songs have different numbers of chunks
         key_name = f'spec_{style}'
+        target_name = f'target_{style}'
         if key_name not in self.data:
             # create
-            self.data.create_dataset(key_name, data=spec_list, dtype='float64', maxshape=(None,) + spec_list.shape[1:], chunks=True) 
+            self.data.create_dataset(key_name, data=spec_list, dtype='float32', maxshape=(None,) + spec_list.shape[1:], chunks=True)
+            self.data.create_dataset(target_name, data=target_list, dtype='float32', maxshape=(None,) + target_list.shape[1:], chunks=True) 
         else:
             # append
             self.data[key_name].resize(self.data[key_name].shape[0] + spec_list.shape[0], axis=0)
             self.data[key_name][-spec_list.shape[0]:] = spec_list
+
+            self.data[target_name].resize(self.data[target_name].shape[0] + target_list.shape[0], axis=0)
+            self.data[target_name][-target_list.shape[0]:] = target_list
 
