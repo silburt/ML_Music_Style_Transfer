@@ -8,7 +8,7 @@ from preprocess import hyperparams
 
 hp = hyperparams()
 
-AUDIO_FILENAME = "2308_prelude18_gentleman.wav"
+AUDIO_FILENAME = "inputs/2308_prelude18_gentleman.wav"
 
 def process_spectrum_from_chunk(audio_chunk):
     spec = librosa.stft(audio_chunk, n_fft=hp.n_fft, hop_length=hp.ws)
@@ -20,6 +20,7 @@ def process_spectrum_from_chunk(audio_chunk):
     mel_spec = librosa.feature.melspectrogram(y=audio_chunk, sr=hp.sr, n_fft=hp.n_fft, hop_length=hp.ws)
     #magnitude = librosa.feature.mfcc(y=audio_chunk, sr=hp.sr, S=None, n_mfcc=20)
     return magnitude_pnet, magnitude_grifflim, mel_spec
+
 
 if __name__ == '__main__':
     audio, sr = librosa.load(AUDIO_FILENAME, sr=hp.sr)
@@ -37,9 +38,10 @@ if __name__ == '__main__':
     fig, ax = plt.subplots(3, 1, sharex=True)
     librosa.display.specshow(magnitude_pnet, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[0])
     librosa.display.specshow(magnitude_grifflim, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[1])
-    librosa.display.specshow(mel_spec, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[2])
+    librosa.display.specshow(mel_spec, sr=hp.sr, hop_length=hp.ws, y_axis='mel', x_axis='time', ax=ax[2])
     ax[0].set_title("pnet")
     ax[1].set_title("grifflim")
     ax[2].set_title("mel_spec")
+    print(f"shapes: original (pnet)={magnitude_pnet.shape}, grifflim_compat={magnitude_grifflim.shape}, mel_spec={mel_spec.shape}")
     #plt.show()
     plt.savefig("outputs/plot_spec.png")
