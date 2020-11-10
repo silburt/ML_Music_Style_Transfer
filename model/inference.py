@@ -16,15 +16,15 @@ import sys
 sys.path.append('../preprocessing/')
 from preprocess import process_spectrum_from_chunk, hyperparams
 
-preprocess_hp = hyperparams()
+pp_hp = hyperparams()
 
 
 class AudioSynthesizer():
     def __init__(self, checkpoint, exp_dir, midi_source, audio_source):
         self.exp_dir = exp_dir
         self.checkpoint = torch.load(os.path.join(exp_dir, checkpoint))
-        self.sample_rate = preprocess_hp.sr
-        self.wps = preprocess_hp.wps
+        self.sample_rate = pp_hp.sr
+        self.wps = pp_hp.wps
         self.midi_source = midi_source
         self.audio_source = audio_source
                 
@@ -51,7 +51,7 @@ class AudioSynthesizer():
         onoff = np.transpose(onoff, (1, 0))
         
         # process audio
-        audio, sr = librosa.load(audio_filename, sr=preprocess_hp.sr)
+        audio, sr = librosa.load(audio_filename, sr=pp_hp.sr)
         spec = process_spectrum_from_chunk(audio)
         #spec = librosa.stft(audio, n_fft=process_hp.n_fft, hop_length=process_hp.stride)
         #magnitude = np.log1p(np.abs(spec)**2)
@@ -102,33 +102,12 @@ class AudioSynthesizer():
                 dir_id += 1
         return audio_out_dir
 
-    def griffinlim(self, spectrogram, audio_id, n_iter = 300, window = 'hann', n_fft = 2048, hop_length = 256, verbose = False):
-        
-        print ('Synthesizing audio {}'.format(audio_id))
-
-        if hop_length == -1:
-            hop_length = n_fft // 4
-            spectrogram[0:5] = 0
-
-        spectrogram[150:] = 0
-        angles = np.exp(2j * np.pi * np.random.rand(*spectrogram.shape))
-
-        t = tqdm(range(n_iter), ncols=100, mininterval=2.0, disable=not verbose)
-        for i in t:
-            full = np.abs(spectrogram).astype(np.complex) * angles
-            inverse = librosa.istft(full, hop_length = hop_length, window = window)
-            rebuilt = librosa.stft(inverse, n_fft = n_fft, hop_length = hop_length, window = window)
-            angles = np.exp(1j * np.angle(rebuilt))
-
-            if verbose:
-                diff = np.abs(spectrogram) - np.abs(rebuilt)
-                t.set_postfix(loss=np.linalg.norm(diff, 'fro'))
-
-        full = np.abs(spectrogram).astype(np.complex) * angles
-        inverse = librosa.istft(full, hop_length = hop_length, window = window)
-
-        return inverse
-
+    def griffinlim(self, spectrogram, audio_id, n_iter=300, window='hann', n_fft=2048, hop_length=256, verbose=False):
+        # from test_griffinlim.py this seems to work well
+        # this is the inverse transform of what is done in preprocess.py, i.e. np.log1p(np.abs(spec)**2) to get it back to 
+        # a standard spectrogram
+        magnitude = np.sqrt(np.expm1(np.clip(spectrogram, 0, 20))) 
+        return librosa.griffinlim(magnitude, n_iter=n_iter, window=window, win_length=n_fft, hop_length=hop_length)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -149,3 +128,27 @@ if __name__ == "__main__":
     main()
             
 
+# legacy
+# def _griffinlim(spectrogram, audio_id, n_iter=300, window='hann', n_fft=2048, hop_length=256, verbose=False):
+#     print ('Synthesizing audio {}'.format(audio_id))
+
+#     if hop_length == -1:
+#         hop_length = n_fft // 4
+#         spectrogram[0:5] = 0
+
+#     spectrogram[150:] = 0
+#     angles = np.exp(2j * np.pi * np.random.rand(*spectrogram.shape))
+#     t = tqdm(range(n_iter), ncols=100, mininterval=2.0, disable=not verbose)
+#     for i in t:
+#         full = np.abs(spectrogram).astype(np.complex) * angles
+#         inverse = librosa.istft(full, hop_length = hop_length, window = window)
+#         rebuilt = librosa.stft(inverse, n_fft = n_fft, hop_length = hop_length, window = window)
+#         angles = np.exp(1j * np.angle(rebuilt))
+
+#         if verbose:
+#             diff = np.abs(spectrogram) - np.abs(rebuilt)
+#             t.set_postfix(loss=np.linalg.norm(diff, 'fro'))
+
+#     full = np.abs(spectrogram).astype(np.complex) * angles
+#     inverse = librosa.istft(full, hop_length = hop_length, window = window)
+#     return inverse
