@@ -9,6 +9,7 @@ import argparse
 import os
 import glob
 import zipfile
+import torchaudio
 from utils import io_manager
 
 ROOT_DIR = '/Users/arisilburt/Machine_Learning/ML_Music_Style_Transfer/'
@@ -26,9 +27,9 @@ class hyperparams(object):
         self.stride = 512 # number of windows of separation between chunks/data points
 
         self.piano_scores = {
-            'train': [
-                2240, 2530, 1763, 2308, 2533, 1772, 2444, 2478, 
-                2509, 1776, 1749, 2486, 2487, 2678, 2490, 2492, 2527
+            'train': [2533
+                #2240, 2530, 1763, 2308, 2533, 1772, 2444, 2478, 
+                #2509, 1776, 1749, 2486, 2487, 2678, 2490, 2492, 2527
             ],  # 2491 errors out, not sure why
             'test': [2533, 1760]
         }
@@ -46,7 +47,7 @@ hp = hyperparams()
 def process_spectrum_from_chunk(audio_chunk):
     # target - this can properly convert back to audio with griffinlim
     spec = librosa.stft(audio_chunk, n_fft=hp.n_fft, hop_length=hp.ws)
-    target = np.abs(spec)
+    target = np.abs(spec) # this produces complex output. Dont think this is gonna fly...
 
     # https://medium.com/analytics-vidhya/understanding-the-mel-spectrogram-fca2afa2ce53
     #magnitude = librosa.feature.melspectrogram(y=audio_chunk, sr=hp.sr, n_fft=hp.n_fft, hop_length=hp.ws)

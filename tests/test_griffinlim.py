@@ -3,6 +3,8 @@ import librosa
 import soundfile as sf
 import os
 import sys
+import torch
+import torchaudio
 sys.path.append('../model/')
 sys.path.append('../preprocessing/')
 from preprocess import process_audio_into_chunks, hyperparams
@@ -24,6 +26,30 @@ def test_griffinlim():
 
     # write
     sf.write(f'outputs/test_griffinlim_{song_id}_{style_id}_sr{hp.sr}.wav', inverse, hp.sr)
-    
+
+
+# Seems to work really well!!
+def test_torchgriffinlim():
+    # init torch
+    t_spec = torchaudio.transforms.Spectrogram(n_fft=hp.n_fft, hop_length=hp.ws)
+    griffinlim = torchaudio.transforms.GriffinLim(n_fft=hp.n_fft, n_iter=300, win_length=hp.n_fft, hop_length=hp.ws)
+
+    # load audio
+    audio, sr = librosa.load(os.path.join("inputs", AUDIO_FILENAME), sr=hp.sr)
+    song_id = AUDIO_FILENAME.split("_")[0]
+    style_id = AUDIO_FILENAME.split("_")[-1].split('.wav')[0]
+
+    # get spectrogram
+    step = 0
+    n_samples_per_chunk = (hp.spc * hp.wps - 1) * hp.ws
+    audio_chunk = audio[(step * hp.ws * hp.stride): (step * hp.ws * hp.stride) + n_samples_per_chunk]
+    spec = t_spec(torch.Tensor(audio_chunk))
+
+    # convert back to audio
+    inverse = griffinlim(spec).detach().cpu().numpy()
+    sf.write(f'outputs/test_griffinlim_{song_id}_{style_id}_sr{hp.sr}_torch.wav', inverse, hp.sr)
+
+
 if __name__ == '__main__':
-    test_griffinlim()
+    #test_griffinlim()
+    test_torchgriffinlim()
