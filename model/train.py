@@ -42,19 +42,14 @@ class hyperparams(object):
         self.best_epoch = 0
 
 
-class Dataseth5py(torch.utils.data.Dataset):
-    # https://discuss.pytorch.org/t/how-to-speed-up-the-data-loader/13740/3
+class DatasetPreprocessRealTime(torch.utils.data.Dataset):
     def __init__(self, in_file, seed=42, n_read=None):
-        super(Dataseth5py, self).__init__()
+        super(DatasetPreprocessRealTime, self).__init__()
 
         self.dataset = h5py.File(in_file, 'r')
         self.styles = [name for name in self.dataset.keys() if 'spec_' in name] # get styles from the data
 
-        # TODO: the big issue is you need to optimize how to read data into memory from h5py
-        # loading one-by-one is way too slow (a few seconds vs. microseconds). Note that the 
-        # rest of the profiling times are: concat/transpose ~ 0.005s, FloatTensor ~ 0.02 
-        # (and thus, after this loading issue is solved FloatTensor becomes the bottleneck unless it 
-        # can be moved to the main train() function and be applied to batches vs individual items here)
+        # TODO: Need to determine whether normalization needs to happen or not
         if n_read is not None:
             self.pianoroll = self.dataset['pianoroll'][:n_read]
             self.onoff = self.dataset['onoff'][:n_read]
@@ -102,6 +97,64 @@ class Dataseth5py(torch.utils.data.Dataset):
 
     def __len__(self):
         return self.n_data
+
+
+# class Dataseth5py(torch.utils.data.Dataset):
+#     # https://discuss.pytorch.org/t/how-to-speed-up-the-data-loader/13740/3
+#     def __init__(self, in_file, seed=42, n_read=None):
+#         super(Dataseth5py, self).__init__()
+
+#         self.dataset = h5py.File(in_file, 'r')
+#         self.styles = [name for name in self.dataset.keys() if 'spec_' in name] # get styles from the data
+
+#         # TODO: Need to determine whether normalization needs to happen or not
+#         if n_read is not None:
+#             self.pianoroll = self.dataset['pianoroll'][:n_read]
+#             self.onoff = self.dataset['onoff'][:n_read]
+#             self.specs = {}
+#             for style in self.styles:
+#                 print(f"loading style: {style}")
+#                 self.specs[style] = self.dataset[style][:n_read] 
+#         else:
+#             self.pianoroll = self.dataset['pianoroll'][:]
+#             self.onoff = self.dataset['onoff'][:]
+#             self.specs = {}
+#             for style in self.styles:
+#                 print(f"loading style: {style}")
+#                 self.specs[style] = self.dataset[style][:]
+
+#         self.n_data = self.pianoroll.shape[0]
+#         random.seed(seed)
+
+#     def __getitem__(self, index):
+#         '''
+#         The input data are the pianoroll, onoff, a *random* spec from the same style
+#         The output data is the *matching* spec for the corresponding pianoroll/onoff
+#         '''
+#         # piano
+#         pianoroll = self.pianoroll[index]
+#         onoff = self.onoff[index]
+#         pianoroll = np.concatenate((pianoroll, onoff), axis=-1)
+#         pianoroll = np.transpose(pianoroll, (1, 0))
+
+#         # specs
+#         style = random.choice(self.styles)
+#         spec = self.specs[style][index]
+#         rand_index = random.randint(0, self.n_data - 1)
+#         spec_rand = self.specs[style][rand_index]
+
+#         if CUDA_FLAG == 1:
+#             X = torch.cuda.FloatTensor(pianoroll)
+#             X_cond = torch.cuda.FloatTensor(spec_rand)
+#             y = torch.cuda.FloatTensor(spec)
+#         else:
+#             X = torch.Tensor(pianoroll)
+#             X_cond = torch.Tensor(spec_rand)
+#             y = torch.Tensor(spec)
+#         return X, X_cond, y
+
+#     def __len__(self):
+#         return self.n_data
 
 
 def Process_Data(data_dir, n_train_read=None, n_test_read=None, batch_size=16):
