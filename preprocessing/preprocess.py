@@ -23,13 +23,14 @@ class hyperparams(object):
     '''
     def __init__(self):
         self.sr = 44100 // 2 # Sampling rate (samples per second)
-        self.n_fft = 2048 # fft points (samples)
-        self.stride = 512 # number of windows of separation between chunks/data points
+        self.n_fft = 2048   # fft points (samples)
+        self.stride = 512   # number of windows of separation between chunks/data points
+        self.n_mfcc = 12    # number of mfcc features
 
         self.piano_scores = {
-            'train': [2533
-                #2240, 2530, 1763, 2308, 2533, 1772, 2444, 2478, 
-                #2509, 1776, 1749, 2486, 2487, 2678, 2490, 2492, 2527
+            'train': [
+                2240, 2530, 1763, 2308, 2533, 1772, 2444, 2478, 
+                2509, 1776, 1749, 2486, 2487, 2678, 2490, 2492, 2527
             ],  # 2491 errors out, not sure why
             'test': [2533, 1760]
         }
@@ -51,7 +52,7 @@ def process_spectrum_from_chunk(audio_chunk):
 
     # https://medium.com/analytics-vidhya/understanding-the-mel-spectrogram-fca2afa2ce53
     #magnitude = librosa.feature.melspectrogram(y=audio_chunk, sr=hp.sr, n_fft=hp.n_fft, hop_length=hp.ws)
-    mfcc = librosa.feature.mfcc(y=audio_chunk, sr=hp.sr, S=None, n_mfcc=12)
+    mfcc = librosa.feature.mfcc(y=audio_chunk, sr=hp.sr, S=None, n_mfcc=hp.n_mfcc)
     return mfcc, target
 
 
