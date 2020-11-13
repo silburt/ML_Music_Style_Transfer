@@ -241,7 +241,7 @@ if __name__ == "__main__":
                         help="location to store results (data-type will be appended as well)")
     parser.add_argument("-data-type", type=str, default='train', choices=['train', 'test'],
                         help="type of data you are generating (train/test)")                                         
-    parser.add_argument("--debug", type=io_manager.str2bool, default=True, 
+    parser.add_argument("--debug", type=io_manager.str2bool, default=False, 
                         help="whether to run in debug mode or not - prints stuff and writes audio/midi samples " \
                              "to a directory so you can listen and confirm alignment is correct.")              
     args = parser.parse_args()

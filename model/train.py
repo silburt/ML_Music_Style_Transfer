@@ -65,7 +65,7 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         #self.torch_melspec = torchaudio.transforms.MelSpectrogram(sample_rate=hp.sr, n_fft=hp.n_fft, hop_length=hp.ws)
 
         if n_read is None:
-            n_read = 10000000
+            n_read = 10000000   # large number to read everything
 
         self.pianoroll = self.dataset['pianoroll'][:n_read]
         self.onoff = self.dataset['onoff'][:n_read]
@@ -190,27 +190,36 @@ def Process_Data(data_dir, n_train_read=None, n_test_read=None, batch_size=16):
     return train_loader, test_loader
 
 
-def engel_loss(loss_function, pred, target):
+class EngelLoss:
+    def __init__(self, n_mels=128, alpha=1):
     # loss from https://arxiv.org/abs/2001.04643
-    loss_1 = loss_function(pred, target)
-    loss_2 = loss_function(torch.log1p(pred), torch.log1p(target))
-    return loss_1 + loss_2
+    self.loss_function = nn.L1Loss()
+    self.mel_scale = torchaudio.transforms.MelScale(n_mels=n_mels, sample_rate=pp_hp.sr)
+
+    def loss(self, pred, target):
+        loss_1 = self.loss_function(pred, target)
+        loss_2 = self.loss_function(
+            self.mel_scale(pred), 
+            self.mel_scale(target)
+        )
+        total_loss = loss_1 + alpha * loss_2
+        return total_loss
 
 
 def train(model, epoch, train_loader, optimizer, iter_train_loss):
     model.train()
     train_loss = 0
+    engel_loss = EngelLoss()
     for batch_idx, (data, data_cond, target) in enumerate(train_loader):        
         optimizer.zero_grad()
         split = torch.split(data, 128, dim=1)
-        loss_function = nn.L1Loss()
         if CUDA_FLAG == 1:
             y_pred = model(split[0].cuda(), data_cond.cuda(), split[1].cuda())
             target = target.cuda()
         else:
             y_pred = model(split[0], data_cond, split[1]) 
         
-        loss = engel_loss(loss_function, y_pred, target)
+        loss = engel_loss(y_pred, target)
         loss.backward()
         iter_train_loss.append(loss.item())
         train_loss += loss
@@ -227,15 +236,16 @@ def test(model, epoch, test_loader, scheduler, iter_test_loss):
     with torch.no_grad():
         model.eval()
         test_loss = 0
+        engel_loss = EngelLoss()
         for idx, (data, data_cond, target) in enumerate(test_loader):
             split = torch.split(data, 128, dim=1)
-            loss_function = nn.MSELoss()
             if CUDA_FLAG == 1:
                 y_pred = model(split[0].cuda(), data_cond.cuda(), split[1].cuda())
-                loss = loss_function(y_pred, target.cuda())
+                target = target.cuda()
             else:
                 y_pred = model(split[0], data_cond, split[1])
-                loss = loss_function(y_pred, target)
+            
+            loss = engel_loss(y_pred, target)
             iter_test_loss.append(loss.item())
             test_loss += loss    
         test_loss/= len(test_loader.dataset)
