@@ -198,11 +198,14 @@ class EngelLoss:
         self.alpha = alpha
 
     def loss(self, pred, target):
+        mel_pred = self.mel_scale(pred)
+        mel_target = self.mel_scale(target)
+        if CUDA_FLAG == 1:
+            mel_pred = mel_pred.to('cuda')
+            mel_target = mel_target.to('cuda')
+
         loss_1 = self.loss_function(pred, target)
-        loss_2 = self.loss_function(
-            self.mel_scale(pred), 
-            self.mel_scale(target)
-        )
+        loss_2 = self.loss_function(mel_pred, mel_target)
         total_loss = loss_1 + self.alpha * loss_2
         return total_loss
 
