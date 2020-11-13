@@ -1,3 +1,10 @@
+# TODO: So I think what you actually should do now for preprocessing is:
+# - get the pianoroll/onoff -> store -> should this be slightly smaller?? 128 keys is probably overkill...
+# - get the mfcc -> store
+# - for each data point store the (song, beginning, end) coordinates to grab the audio chunk and turn it into spectrogram on the fly
+# - store all the audio clips
+# - Need to figure out how to properly normalize everything
+
 import numpy as np
 import librosa
 from scipy import fft 
@@ -24,18 +31,20 @@ class hyperparams(object):
     def __init__(self):
         self.sr = 44100 // 2 # Sampling rate (samples per second)
         self.n_fft = 2048   # fft points (samples)
-        self.stride = 512   # number of windows of separation between chunks/data points
+        self.stride = 256   # number of windows of separation between chunks/data points
         self.n_mfcc = 12    # number of mfcc features
 
         self.piano_scores = {
             'train': [
-                2240, 2530, 1763, 2308, 2533, 1772, 2444, 2478, 
-                2509, 1776, 1749, 2486, 2487, 2678, 2490, 2492, 2527
+                1760, 2308
+                #2240, 2530, 1763, 2308, 2533, 1772, 2444, 2478, 
+                #2509, 1776, 1749, 2486, 2487, 2678, 2490, 2492, 2527
             ],  # 2491 errors out, not sure why
             'test': [2533, 1760]
         }
         # additional styles - 'markisuitcase', 'wurlycrunchymellow', 'berlinbach'
         self.styles = ['cuba', 'aliciakeys', 'gentleman', 'harpsichord', 'upright']
+        #self.idx_to_style_mapping = {style : i for i, style in enumerate(self.styles)}  # for target_coords_list
         
         # A.S. each song is chopped into windows, and I *think* hop is the window length?
         self.ws = 256   # window size (audio samples per window)
@@ -47,34 +56,40 @@ hp = hyperparams()
 
 def process_spectrum_from_chunk(audio_chunk):
     # target - this can properly convert back to audio with griffinlim
-    spec = librosa.stft(audio_chunk, n_fft=hp.n_fft, hop_length=hp.ws)
-    target = np.abs(spec) # this produces complex output. Dont think this is gonna fly...
+    #spec = librosa.stft(audio_chunk, n_fft=hp.n_fft, hop_length=hp.ws)
+    #target = np.abs(spec) # this produces complex output. Dont think this is gonna fly...
 
     # https://medium.com/analytics-vidhya/understanding-the-mel-spectrogram-fca2afa2ce53
     #magnitude = librosa.feature.melspectrogram(y=audio_chunk, sr=hp.sr, n_fft=hp.n_fft, hop_length=hp.ws)
     mfcc = librosa.feature.mfcc(y=audio_chunk, sr=hp.sr, S=None, n_mfcc=hp.n_mfcc)
-    return mfcc, target
+    return mfcc
 
 
 def process_audio_into_chunks(audio, style, song_id, num_chunks, debug=False):
     print(f"processing {style} style for song_id {song_id}")
     spec_list=[]
-    target_list = []
+    target_coords_list = []
     for step in range(num_chunks):
         # get audio chunk 
         #n_samples_per_chunk = hp.spc * hp.sr   # this should work, but below has -1 (like pnet) to get correct dimension...
         n_samples_per_chunk = (hp.spc * hp.wps - 1) * hp.ws
-        audio_chunk = audio[(step * hp.ws * hp.stride): (step * hp.ws * hp.stride) + n_samples_per_chunk] 
+        audio_chunk = audio[(step * hp.ws * hp.stride): (step * hp.ws * hp.stride) + n_samples_per_chunk]
         
+        # get audio coordinates
+        chunk_begin_index = step * hp.ws * hp.stride
+        chunk_end_index = (step * hp.ws * hp.stride) + n_samples_per_chunk
+        audio_chunk_coords = (song_id, chunk_begin_index, chunk_end_index)
+        target_coords_list.append(audio_chunk_coords)
+
+        # process mfcc (input conditioning) and append
+        mfcc_chunk = process_spectrum_from_chunk(audio_chunk)
+        spec_list.append(mfcc_chunk)
+
         # check that the windowing alignment between midi/audio is correct
         if debug == True:
             io_manager.write_chunked_samples(DEBUG_DIR, song_id, step, hp, style=style, audio_chunk=audio_chunk)
         
-        # process spectrum and append
-        spec_chunk, target_chunk = process_spectrum_from_chunk(audio_chunk)
-        spec_list.append(spec_chunk)
-        target_list.append(target_chunk)
-    return np.array(spec_list), np.array(target_list)
+    return np.array(spec_list), np.array(target_coords_list)
 
 
 def process_pianoroll_into_chunks(pianoroll, onoff, song_id, num_chunks, debug=False):
@@ -115,17 +130,19 @@ def load_audio(data_dir, song_id, style, debug=False):
     return y
 
 
-def get_num_song_chunks(pianoroll, offset_percentage=0.1, max_chunks=100):
+def get_num_song_chunks(pianoroll, offset_percentage=0.1, max_chunks=10000):
     '''
     Get number of chunks in the song. 
     - offset_percentage is to allow a bit of wiggle room to make sure we dont accidentally run off the end. Some of the audio/midi
-    lengths end at slightly different spots (bug to be fixed...)
+    lengths end at slightly different spots (bug to be fixed... =P)
     '''
+    # pianoroll way to calculate number of chunks
     n_windows_per_chunk = hp.spc * hp.wps
     num_chunks = (pianoroll.shape[0] - n_windows_per_chunk) // hp.stride
+    
     # audio way to calculate number of chunks
-    #n_samples_per_chunk = hp.spc * hp.sr
-    #num_chunks = (len(audio) - n_samples_per_chunk) // (hp.ws * hp.stride)
+    # n_samples_per_chunk = hp.spc * hp.sr
+    # num_chunks_audio = (len(audio) - n_samples_per_chunk) // (hp.ws * hp.stride)
     
     offset = int(offset_percentage * num_chunks)
     num_chunks -= offset
@@ -190,13 +207,14 @@ def get_data(data_dir, dataset_outpath, data_type, debug=False):
                     continue
 
                 # process into chunks
-                spec_list, target_list = process_audio_into_chunks(audio, style, song_id, num_chunks, debug=debug)
+                mfcc_list, target_coords_list = process_audio_into_chunks(audio, style, song_id, num_chunks, debug=debug)
                 
                 # write
-                data_manager.write_spectrum(spec_list, target_list, style)
+                data_manager.write_audio_features(mfcc_list, target_coords_list, style)
+                data_manager.write_audio(audio, song_id, style)
 
                 if debug is True:
-                    assert pianoroll_list.shape[0] == spec_list.shape[0]
+                    assert pianoroll_list.shape[0] == mfcc_list.shape[0]
                     assert pianoroll_list.shape == onoff_list.shape
 
 

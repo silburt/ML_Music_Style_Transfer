@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 from torch.nn import init
 import torch.nn.functional as F
+import torchaudio
 import numpy as np
 import torch.optim as optim
 from sklearn.model_selection import train_test_split
@@ -23,6 +24,11 @@ import argparse
 import os
 import time
 import random
+import sys
+sys.path.append('../preprocessing')
+from preprocess import hyperparams as pp_hyperparams
+
+pp_hp = pp_hyperparams()
 
 CUDA_FLAG = 0
 if torch.cuda.is_available():
@@ -47,31 +53,34 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         super(DatasetPreprocessRealTime, self).__init__()
 
         self.dataset = h5py.File(in_file, 'r')
-        self.styles = [name for name in self.dataset.keys() if 'spec_' in name] # get styles from the data
+        self.styles = [name.split('mfcc_')[1] for name in self.dataset.keys() if 'mfcc_' in name] # get styles from the data
 
-        # TODO: Need to determine whether normalization needs to happen or not
-        if n_read is not None:
-            self.pianoroll = self.dataset['pianoroll'][:n_read]
-            self.onoff = self.dataset['onoff'][:n_read]
-            self.specs = {}
-            for style in self.styles:
-                print(f"loading style: {style}")
-                self.specs[style] = self.dataset[style][:n_read] 
-        else:
-            self.pianoroll = self.dataset['pianoroll'][:]
-            self.onoff = self.dataset['onoff'][:]
-            self.specs = {}
-            for style in self.styles:
-                print(f"loading style: {style}")
-                self.specs[style] = self.dataset[style][:]
+        # load all the raw audio files
+        self.audios = {key: self.dataset[key] for key in self.dataset.keys() if 'audio_' in key}
+
+        # init spectrogram
+        self.torch_spectrogram = torchaudio.transforms.Spectrogram(n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
+
+        if n_read is None:
+            n_read = 10000000
+
+        self.pianoroll = self.dataset['pianoroll'][:n_read]
+        self.onoff = self.dataset['onoff'][:n_read]
+        self.mfccs = {}
+        self.target_coords = {}
+        for style in self.styles:
+            print(f"loading style: {style}")
+            self.mfccs[style] = self.dataset['mfcc_' + style][:n_read] 
+            self.target_coords[style] = self.dataset['target_coords_' + style][:n_read] 
 
         self.n_data = self.pianoroll.shape[0]
         random.seed(seed)
 
+
     def __getitem__(self, index):
         '''
-        The input data are the pianoroll, onoff, a *random* spec from the same style
-        The output data is the *matching* spec for the corresponding pianoroll/onoff
+        The input data are the pianoroll, onoff, a random mfcc from the same style
+        The output data is the spectrogram calculated on-the-fly (to save space) for the corresponding pianoroll/onoff
         '''
         # piano
         pianoroll = self.pianoroll[index]
@@ -79,20 +88,25 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         pianoroll = np.concatenate((pianoroll, onoff), axis=-1)
         pianoroll = np.transpose(pianoroll, (1, 0))
 
-        # specs
+        # pick random style
         style = random.choice(self.styles)
-        spec = self.specs[style][index]
+
+        # random mfcc for selected style as input conditioning
         rand_index = random.randint(0, self.n_data - 1)
-        spec_rand = self.specs[style][rand_index]
+        mfcc_rand = self.mfccs[style][rand_index]
+
+        # target
+        song_id, chunk_begin_index, chunk_end_index = self.target_coords[style][index]
+        audio_chunk = self.audios[f'audio_{song_id}_{style}'][chunk_begin_index: chunk_end_index]
 
         if CUDA_FLAG == 1:
             X = torch.cuda.FloatTensor(pianoroll)
-            X_cond = torch.cuda.FloatTensor(spec_rand)
-            y = torch.cuda.FloatTensor(spec)
+            X_cond = torch.cuda.FloatTensor(mfcc_rand)
+            y = self.torch_spectrogram(torch.cuda.FloatTensor(audio_chunk))
         else:
             X = torch.Tensor(pianoroll)
-            X_cond = torch.Tensor(spec_rand)
-            y = torch.Tensor(spec)
+            X_cond = torch.Tensor(mfcc_rand)
+            y = self.torch_spectrogram(torch.Tensor(audio_chunk))
         return X, X_cond, y
 
     def __len__(self):
@@ -169,10 +183,10 @@ def Process_Data(data_dir, n_train_read=None, n_test_read=None, batch_size=16):
     return train_loader, test_loader
 
 
-def engel_loss(pred, target):
+def engel_loss(loss_function, pred, target):
     # loss from https://arxiv.org/abs/2001.04643
-    loss_1 = nn.L1Loss()(pred, target)
-    loss_2 = nn.L1Loss()(torch.log1p(pred), torch.log1p(target))
+    loss_1 = loss_function(pred, target)
+    loss_2 = loss_function(torch.log1p(pred), torch.log1p(target))
     return loss_1 + loss_2
 
 
@@ -182,16 +196,14 @@ def train(model, epoch, train_loader, optimizer, iter_train_loss):
     for batch_idx, (data, data_cond, target) in enumerate(train_loader):        
         optimizer.zero_grad()
         split = torch.split(data, 128, dim=1)
-        #loss_function = nn.L1Loss()
+        loss_function = nn.L1Loss()
         if CUDA_FLAG == 1:
             y_pred = model(split[0].cuda(), data_cond.cuda(), split[1].cuda())
-            #loss = loss_function(y_pred, target.cuda())
-            loss = engel_loss(y_pred, target.cuda())
+            target = target.cuda()
         else:
             y_pred = model(split[0], data_cond, split[1]) 
-            #loss = loss_function(y_pred, target)
-            loss = engel_loss(y_pred, target)
         
+        loss = engel_loss(loss_function, y_pred, target)
         loss.backward()
         iter_train_loss.append(loss.item())
         train_loss += loss
