@@ -120,64 +120,6 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         return self.n_data
 
 
-# class Dataseth5py(torch.utils.data.Dataset):
-#     # https://discuss.pytorch.org/t/how-to-speed-up-the-data-loader/13740/3
-#     def __init__(self, in_file, seed=42, n_read=None):
-#         super(Dataseth5py, self).__init__()
-
-#         self.dataset = h5py.File(in_file, 'r')
-#         self.styles = [name for name in self.dataset.keys() if 'spec_' in name] # get styles from the data
-
-#         # TODO: Need to determine whether normalization needs to happen or not
-#         if n_read is not None:
-#             self.pianoroll = self.dataset['pianoroll'][:n_read]
-#             self.onoff = self.dataset['onoff'][:n_read]
-#             self.specs = {}
-#             for style in self.styles:
-#                 print(f"loading style: {style}")
-#                 self.specs[style] = self.dataset[style][:n_read] 
-#         else:
-#             self.pianoroll = self.dataset['pianoroll'][:]
-#             self.onoff = self.dataset['onoff'][:]
-#             self.specs = {}
-#             for style in self.styles:
-#                 print(f"loading style: {style}")
-#                 self.specs[style] = self.dataset[style][:]
-
-#         self.n_data = self.pianoroll.shape[0]
-#         random.seed(seed)
-
-#     def __getitem__(self, index):
-#         '''
-#         The input data are the pianoroll, onoff, a *random* spec from the same style
-#         The output data is the *matching* spec for the corresponding pianoroll/onoff
-#         '''
-#         # piano
-#         pianoroll = self.pianoroll[index]
-#         onoff = self.onoff[index]
-#         pianoroll = np.concatenate((pianoroll, onoff), axis=-1)
-#         pianoroll = np.transpose(pianoroll, (1, 0))
-
-#         # specs
-#         style = random.choice(self.styles)
-#         spec = self.specs[style][index]
-#         rand_index = random.randint(0, self.n_data - 1)
-#         spec_rand = self.specs[style][rand_index]
-
-#         if CUDA_FLAG == 1:
-#             X = torch.cuda.FloatTensor(pianoroll)
-#             X_cond = torch.cuda.FloatTensor(spec_rand)
-#             y = torch.cuda.FloatTensor(spec)
-#         else:
-#             X = torch.Tensor(pianoroll)
-#             X_cond = torch.Tensor(spec_rand)
-#             y = torch.Tensor(spec)
-#         return X, X_cond, y
-
-#     def __len__(self):
-#         return self.n_data
-
-
 def Process_Data(data_dir, n_train_read=None, n_test_read=None, batch_size=16):
     print("loading training data")
     train_dataset = DatasetPreprocessRealTime(data_dir + '_train.hdf5', n_read=n_train_read)
@@ -213,17 +155,19 @@ class EngelLoss:
 def train(model, epoch, train_loader, optimizer, iter_train_loss):
     model.train()
     train_loss = 0
-    engel_loss = EngelLoss()
+    #engel_loss = EngelLoss()
     for batch_idx, (data, data_cond, target) in enumerate(train_loader):        
         optimizer.zero_grad()
         split = torch.split(data, 128, dim=1)
+        loss_function = nn.L1Loss()
         if CUDA_FLAG == 1:
             y_pred = model(split[0].cuda(), data_cond.cuda(), split[1].cuda())
             target = target.cuda()
         else:
             y_pred = model(split[0], data_cond, split[1]) 
         
-        loss = engel_loss.loss(y_pred, target)
+        #loss = engel_loss.loss(y_pred, target)
+        loss = loss_function(y_pred, target)
         loss.backward()
         iter_train_loss.append(loss.item())
         train_loss += loss
@@ -240,16 +184,19 @@ def test(model, epoch, test_loader, scheduler, iter_test_loss):
     with torch.no_grad():
         model.eval()
         test_loss = 0
-        engel_loss = EngelLoss()
+        #engel_loss = EngelLoss()
+        loss_function = nn.L1Loss()
         for idx, (data, data_cond, target) in enumerate(test_loader):
             split = torch.split(data, 128, dim=1)
             if CUDA_FLAG == 1:
                 y_pred = model(split[0].cuda(), data_cond.cuda(), split[1].cuda())
                 target = target.cuda()
+                y_pred = y_pred.cuda()
             else:
                 y_pred = model(split[0], data_cond, split[1])
             
-            loss = engel_loss.loss(y_pred, target)
+            #loss = engel_loss.loss(y_pred, target)
+            loss = loss_function(y_pred, target)
             iter_test_loss.append(loss.item())
             test_loss += loss    
         test_loss/= len(test_loader.dataset)
