@@ -192,9 +192,9 @@ def Process_Data(data_dir, n_train_read=None, n_test_read=None, batch_size=16):
 
 class EngelLoss:
     def __init__(self, n_mels=128, alpha=1):
-    # loss from https://arxiv.org/abs/2001.04643
-    self.loss_function = nn.L1Loss()
-    self.mel_scale = torchaudio.transforms.MelScale(n_mels=n_mels, sample_rate=pp_hp.sr)
+        # loss from https://arxiv.org/abs/2001.04643
+        self.loss_function = nn.L1Loss()
+        self.mel_scale = torchaudio.transforms.MelScale(n_mels=n_mels, sample_rate=pp_hp.sr)
 
     def loss(self, pred, target):
         loss_1 = self.loss_function(pred, target)
