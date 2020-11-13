@@ -217,7 +217,7 @@ def get_data(data_dir, dataset_outpath, data_type, debug=False):
                 data_manager.write_audio(audio, song_id, style)
 
                 if debug is True:
-                    assert pianoroll_list.shape[0] == mfcc_list.shape[0]
+                    #assert pianoroll_list.shape[0] == mfcc_list.shape[0]
                     assert pianoroll_list.shape == onoff_list.shape
 
 
