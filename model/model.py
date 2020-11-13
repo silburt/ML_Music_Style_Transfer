@@ -63,9 +63,9 @@ class UpConv(nn.Module):
         self.out_channels = out_channels
         self.cond_channels = cond_channels
         self.activation = activation
-        self.upconv = upconv1x2(self.in_channels, self.out_channels,kernel=upconv_kernel)
+        self.upconv = upconv1x2(self.in_channels, self.out_channels, kernel=upconv_kernel)
         self.upconv_BN = nn.InstanceNorm1d(self.out_channels) 
-        self.conv1 = conv1x3( self.skip_channels + self.out_channels, self.out_channels)   
+        self.conv1 = conv1x3(self.skip_channels + self.out_channels, self.out_channels)   
         self.conv1_BN = nn.InstanceNorm1d(self.out_channels)
         self.conv2 = conv1x3(self.out_channels + self.cond_channels, self.out_channels) 
         self.conv2_BN = nn.InstanceNorm1d(self.out_channels)
@@ -230,10 +230,10 @@ class PerformanceNet(nn.Module):
 
         # up convs
         self.up_convs = []
-        self.up_convs.append(UpConv(4096,2048,2048, 1024, block_id = 5, upconv_kernel=6))
-        self.up_convs.append(UpConv(2048,1024,1024, 512, block_id = 6, upconv_kernel=4))
-        self.up_convs.append(UpConv(1024,1024,512,0, block_id= 7, upconv_kernel=3))
-        self.up_convs.append(UpConv(1024,1024,256,0, block_id = 8))
+        self.up_convs.append(UpConv(4096,2048,2048,1024, block_id=5, upconv_kernel=6))
+        self.up_convs.append(UpConv(2048,1024,1024,512, block_id=6, upconv_kernel=4))
+        self.up_convs.append(UpConv(1024,1024,512,0, block_id=7, upconv_kernel=3))
+        self.up_convs.append(UpConv(1024,1024,256,0, block_id=8))
         self.up_convs = nn.ModuleList(self.up_convs)
 
         # multi-band residual blocks
@@ -267,11 +267,10 @@ class PerformanceNet(nn.Module):
         # midis 
         encoder_layer_outputs_midi = []
         for i, module in enumerate(self.down_convs):
-            x_midi, before_pool = module(x_midi)
-            encoder_layer_outputs_midi.append(before_pool)
+            x_midi, before_pool_midi = module(x_midi)
+            encoder_layer_outputs_midi.append(before_pool_midi)
 
         # audio spectrograms - I believe they are mel-spectrograms - standard convnets
-        # TODO: finish the unet architecture where you save and merge the audio spectrogram
         encoder_layer_outputs_audio = []
         for i, module in enumerate(self.down_convs_audio):
             x_audio, before_pool_audio = module(x_audio)

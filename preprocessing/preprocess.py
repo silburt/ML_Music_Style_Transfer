@@ -29,7 +29,8 @@ class hyperparams(object):
         - chunk: the entire pianoroll segment that will constitude a data point (X windows make a chunk)
     '''
     def __init__(self):
-        self.sr = 44100 // 2 # Sampling rate (samples per second)
+        self.sr_reduction = 2   # reduction factor from standard 44100 khz
+        self.sr = 44100 // self.sr_reduction # Sampling rate (samples per second)
         self.n_fft = 2048   # fft points (samples)
         self.stride = 256   # number of windows of separation between chunks/data points
         self.n_mfcc = 12    # number of mfcc features
@@ -47,8 +48,8 @@ class hyperparams(object):
         #self.idx_to_style_mapping = {style : i for i, style in enumerate(self.styles)}  # for target_coords_list
         
         # A.S. each song is chopped into windows, and I *think* hop is the window length?
-        self.ws = 256   # window size (audio samples per window)
-        self.wps = self.sr // self.ws # ~86 windows/second
+        self.ws = 256 // self.sr_reduction  # window size (audio samples per window)
+        self.wps = self.sr // self.ws       # ~172 windows/second
         self.spc = 5    # seconds per chunk
 
 hp = hyperparams()
@@ -240,7 +241,7 @@ if __name__ == "__main__":
                         help="location to store results (data-type will be appended as well)")
     parser.add_argument("-data-type", type=str, default='train', choices=['train', 'test'],
                         help="type of data you are generating (train/test)")                                         
-    parser.add_argument("--debug", type=io_manager.str2bool, default=False, 
+    parser.add_argument("--debug", type=io_manager.str2bool, default=True, 
                         help="whether to run in debug mode or not - prints stuff and writes audio/midi samples " \
                              "to a directory so you can listen and confirm alignment is correct.")              
     args = parser.parse_args()
