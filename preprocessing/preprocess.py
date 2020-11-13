@@ -82,15 +82,14 @@ def process_audio_into_chunks(audio, style, song_id, num_chunks, debug=False):
         target_coords_list.append(audio_chunk_coords)
 
         # process mfcc (input conditioning) and append
-        #mfcc_chunk = process_spectrum_from_chunk(audio_chunk)
-        #spec_list.append(mfcc_chunk)
+        mfcc_chunk = process_spectrum_from_chunk(audio_chunk)
+        spec_list.append(mfcc_chunk)
 
         # check that the windowing alignment between midi/audio is correct
         if debug == True:
             io_manager.write_chunked_samples(DEBUG_DIR, song_id, step, hp, style=style, audio_chunk=audio_chunk)
-    
-    return np.array(target_coords_list)
-    #return np.array(spec_list), np.array(target_coords_list)
+        
+    return np.array(spec_list), np.array(target_coords_list)
 
 
 def process_pianoroll_into_chunks(pianoroll, onoff, song_id, num_chunks, debug=False):
@@ -208,16 +207,14 @@ def get_data(data_dir, dataset_outpath, data_type, debug=False):
                     continue
 
                 # process into chunks
-                #mfcc_list, target_coords_list = process_audio_into_chunks(audio, style, song_id, num_chunks, debug=debug)
-                target_coords_list = process_audio_into_chunks(audio, style, song_id, num_chunks, debug=debug)
+                mfcc_list, target_coords_list = process_audio_into_chunks(audio, style, song_id, num_chunks, debug=debug)
                 
                 # write
-                mfcc_list = []
                 data_manager.write_audio_features(mfcc_list, target_coords_list, style)
                 data_manager.write_audio(audio, song_id, style)
 
                 if debug is True:
-                    #assert pianoroll_list.shape[0] == mfcc_list.shape[0]
+                    assert pianoroll_list.shape[0] == mfcc_list.shape[0]
                     assert pianoroll_list.shape == onoff_list.shape
 
 
