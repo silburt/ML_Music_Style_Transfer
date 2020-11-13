@@ -58,7 +58,7 @@ def test_torchaudio_transforms():
         torch_mfcc = normalize(t_mfcc(torch.Tensor(audio_chunk)).detach().cpu().numpy())
         print("min/max mfcc", np.min(mfcc), np.max(mfcc))
         print("min/max torch_mfcc", np.min(torch_mfcc), np.max(torch_mfcc))
-        #print(mfcc.shape, torch_mfcc.shape)
+        print(mfcc.shape, torch_mfcc.shape)
         #assert np.allclose(mfcc, torch_mfcc)
 
         # sizes - spec size is *by far* the biggest size, so computing even just those on the fly
@@ -69,11 +69,11 @@ def test_torchaudio_transforms():
         print(f"mfcc size (bytes): {mfcc.nbytes}, {mfcc.shape}")
 
         # plot
-        # fig, ax = plt.subplots(2, 1, sharex=True)
-        # librosa.display.specshow(mel, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[0])
-        # librosa.display.specshow(torch_mel, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[1])
-        # plt.show()
-        # plt.close()
+        fig, ax = plt.subplots(2, 1, sharex=True)
+        librosa.display.specshow(mfcc, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[0])
+        librosa.display.specshow(torch_mfcc, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[1])
+        plt.show()
+        plt.close()
     
     print("test passes!")
 

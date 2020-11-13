@@ -58,8 +58,11 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         # load all the raw audio files
         self.audios = {key: self.dataset[key] for key in self.dataset.keys() if 'audio_' in key}
 
-        # init spectrogram
+        # init specs
         self.torch_spectrogram = torchaudio.transforms.Spectrogram(n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
+        melkwargs = {'hop_length': pp_hp.ws, 'n_fft': pp_hp.n_fft, }
+        self.torch_mfcc = torchaudio.transforms.MFCC(sample_rate=pp_hp.sr, n_mfcc=12, melkwargs=melkwargs)
+        #self.torch_melspec = torchaudio.transforms.MelSpectrogram(sample_rate=hp.sr, n_fft=hp.n_fft, hop_length=hp.ws)
 
         if n_read is None:
             n_read = 10000000
@@ -93,7 +96,10 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
 
         # random mfcc for selected style as input conditioning
         rand_index = random.randint(0, self.n_data - 1)
-        mfcc_rand = self.mfccs[style][rand_index]
+        #mfcc_rand = self.mfccs[style][rand_index]
+        song_id_rand, chunk_begin_index_rand, chunk_end_index_rand = self.target_coords[style][rand_index].astype('int')
+        audio_chunk_rand = self.audios[f'audio_{song_id_rand}_{style}'][chunk_begin_index_rand: chunk_end_index_rand]
+        X_cond = self.torch_mfcc(torch.Tensor(audio_chunk_rand))
 
         # make target spectrogram
         song_id, chunk_begin_index, chunk_end_index = self.target_coords[style][index].astype('int')
@@ -102,11 +108,12 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
 
         if CUDA_FLAG == 1:
             X = torch.cuda.FloatTensor(pianoroll)
-            X_cond = torch.cuda.FloatTensor(mfcc_rand)
+            #X_cond = torch.cuda.FloatTensor(mfcc_rand)
+            X_cond = X_cond.to('cuda')
             y = y.to('cuda')
         else:
             X = torch.Tensor(pianoroll)
-            X_cond = torch.Tensor(mfcc_rand)
+            #X_cond = torch.Tensor(mfcc_rand)
         return X, X_cond, y
 
     def __len__(self):
