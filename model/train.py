@@ -195,6 +195,7 @@ class EngelLoss:
         # loss from https://arxiv.org/abs/2001.04643
         self.loss_function = nn.L1Loss()
         self.mel_scale = torchaudio.transforms.MelScale(n_mels=n_mels, sample_rate=pp_hp.sr)
+        self.alpha = alpha
 
     def loss(self, pred, target):
         loss_1 = self.loss_function(pred, target)
@@ -202,7 +203,7 @@ class EngelLoss:
             self.mel_scale(pred), 
             self.mel_scale(target)
         )
-        total_loss = loss_1 + alpha * loss_2
+        total_loss = loss_1 + self.alpha * loss_2
         return total_loss
 
 
@@ -219,7 +220,7 @@ def train(model, epoch, train_loader, optimizer, iter_train_loss):
         else:
             y_pred = model(split[0], data_cond, split[1]) 
         
-        loss = engel_loss(y_pred, target)
+        loss = engel_loss.loss(y_pred, target)
         loss.backward()
         iter_train_loss.append(loss.item())
         train_loss += loss
@@ -245,7 +246,7 @@ def test(model, epoch, test_loader, scheduler, iter_test_loss):
             else:
                 y_pred = model(split[0], data_cond, split[1])
             
-            loss = engel_loss(y_pred, target)
+            loss = engel_loss.loss(y_pred, target)
             iter_test_loss.append(loss.item())
             test_loss += loss    
         test_loss/= len(test_loader.dataset)
