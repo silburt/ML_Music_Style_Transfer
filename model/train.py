@@ -95,18 +95,18 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         rand_index = random.randint(0, self.n_data - 1)
         mfcc_rand = self.mfccs[style][rand_index]
 
-        # target
-        song_id, chunk_begin_index, chunk_end_index = self.target_coords[style][index]
+        # make target spectrogram
+        song_id, chunk_begin_index, chunk_end_index = self.target_coords[style][index].astype('int')
         audio_chunk = self.audios[f'audio_{song_id}_{style}'][chunk_begin_index: chunk_end_index]
+        y = self.torch_spectrogram(torch.Tensor(audio_chunk))
 
         if CUDA_FLAG == 1:
             X = torch.cuda.FloatTensor(pianoroll)
             X_cond = torch.cuda.FloatTensor(mfcc_rand)
-            y = self.torch_spectrogram(torch.cuda.FloatTensor(audio_chunk))
+            y = y.to('cuda')
         else:
             X = torch.Tensor(pianoroll)
             X_cond = torch.Tensor(mfcc_rand)
-            y = self.torch_spectrogram(torch.Tensor(audio_chunk))
         return X, X_cond, y
 
     def __len__(self):
@@ -173,9 +173,9 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
 
 def Process_Data(data_dir, n_train_read=None, n_test_read=None, batch_size=16):
     print("loading training data")
-    train_dataset = Dataseth5py(data_dir + '_train.hdf5', n_read=n_train_read)
+    train_dataset = DatasetPreprocessRealTime(data_dir + '_train.hdf5', n_read=n_train_read)
     print("loading test data")
-    test_dataset = Dataseth5py(data_dir + '_test.hdf5', n_read=n_test_read)
+    test_dataset = DatasetPreprocessRealTime(data_dir + '_test.hdf5', n_read=n_test_read)
 
     kwargs = {}
     train_loader = utils.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, **kwargs)

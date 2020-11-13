@@ -177,11 +177,12 @@ class MBRBlock(nn.Module):
 
 
 class PerformanceNet(nn.Module):
-    def __init__(self, depth=5, start_channels=128, start_audio_channels=1025):
+    def __init__(self, depth=5, start_channels=128, #start_audio_channels=1025):
+                       start_audio_cond_channels=12):
         super(PerformanceNet, self).__init__()
         self.depth = depth
         self.start_channels = start_channels 
-        self.start_audio_channels = start_audio_channels
+        self.start_audio_cond_channels = start_audio_cond_channels=
         self.construct_layers()
         self.reset_params()
         
@@ -200,13 +201,13 @@ class PerformanceNet(nn.Module):
         self.down_convs = nn.ModuleList(self.down_convs)
         
         # down convs audio
-        outs_channel_list_audio = [
-            int(1024*1.5), 2048, int(2048*1.5), 4096, int(4096*1.5)
-        ]
+        #outs_channel_list_audio = [int(1024*1.5), 2048, int(2048*1.5), 4096, int(4096*1.5)] # for specs
+        outs_channel_list_audio = [12 * 2, 2048, int(2048*1.5), 4096, int(4096*1.5)] # for specs
         self.down_convs_audio = []
         for i in range(self.depth):
-            ins = self.start_audio_channels if i == 0 else outs
-            outs = outs_channel_list_audio[i]
+            ins = self.start_audio_cond_channels if i == 0 else outs
+            outs = self.start_audio_cond_channels * (2 ** (i+1))
+            #outs = outs_channel_list_audio[i]
             #outs = min(self.start_audio_channels * (2 ** (i+1)), 4096)
             pooling = True if i < self.depth-1 else False
             DC = DownConv(ins, outs, pooling=pooling, block_id=i)

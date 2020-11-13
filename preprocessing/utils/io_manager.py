@@ -70,7 +70,7 @@ class h5pyManager():
         if key_name not in self.data:
             # create
             self.data.create_dataset(key_name, data=mfcc_list, dtype='float32', maxshape=(None,) + mfcc_list.shape[1:], chunks=True)
-            self.data.create_dataset(target_name, data=target_coords_list, dtype='float32', maxshape=(None,) + target_coords_list.shape[1:], chunks=True) 
+            self.data.create_dataset(target_name, data=target_coords_list, dtype='int', maxshape=(None,) + target_coords_list.shape[1:], chunks=True) 
         else:
             # append
             self.data[key_name].resize(self.data[key_name].shape[0] + mfcc_list.shape[0], axis=0)
