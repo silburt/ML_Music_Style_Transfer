@@ -61,7 +61,7 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         # init specs
         self.torch_spectrogram = torchaudio.transforms.Spectrogram(n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
         #melkwargs = {'hop_length': pp_hp.ws, 'n_fft': pp_hp.n_fft, }
-        #self.torch_mfcc = torchaudio.transforms.MFCC(sample_rate=pp_hp.sr, n_mfcc=12, melkwargs=melkwargs)
+        #self.torch_mfcc = torchaudio.transforms.MFCC(sample_rate=pp_hp.sr, n_mfcc=12, melkwargs=melkwargs) # didn't work - loss ~ 0.8 the whole time
         self.torch_melspec = torchaudio.transforms.MelSpectrogram(sample_rate=pp_hp.sr, n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
 
         if n_read is None:

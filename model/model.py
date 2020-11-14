@@ -177,8 +177,7 @@ class MBRBlock(nn.Module):
 
 
 class PerformanceNet(nn.Module):
-    def __init__(self, depth=5, start_channels=128, #start_audio_channels=1025):
-                       start_audio_cond_channels=12):
+    def __init__(self, depth=5, start_channels=128, start_audio_cond_channels=128): #start_audio_channels=1025):
         super(PerformanceNet, self).__init__()
         self.depth = depth
         self.start_channels = start_channels 
