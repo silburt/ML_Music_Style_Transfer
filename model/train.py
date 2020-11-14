@@ -60,20 +60,20 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
 
         # init specs
         self.torch_spectrogram = torchaudio.transforms.Spectrogram(n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
-        melkwargs = {'hop_length': pp_hp.ws, 'n_fft': pp_hp.n_fft, }
-        self.torch_mfcc = torchaudio.transforms.MFCC(sample_rate=pp_hp.sr, n_mfcc=12, melkwargs=melkwargs)
-        #self.torch_melspec = torchaudio.transforms.MelSpectrogram(sample_rate=hp.sr, n_fft=hp.n_fft, hop_length=hp.ws)
+        #melkwargs = {'hop_length': pp_hp.ws, 'n_fft': pp_hp.n_fft, }
+        #self.torch_mfcc = torchaudio.transforms.MFCC(sample_rate=pp_hp.sr, n_mfcc=12, melkwargs=melkwargs)
+        self.torch_melspec = torchaudio.transforms.MelSpectrogram(sample_rate=pp_hp.sr, n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
 
         if n_read is None:
             n_read = 10000000   # large number to read everything
 
         self.pianoroll = self.dataset['pianoroll'][:n_read]
         self.onoff = self.dataset['onoff'][:n_read]
-        self.mfccs = {}
+        #self.mfccs = {}
         self.target_coords = {}
         for style in self.styles:
             print(f"loading style: {style}")
-            self.mfccs[style] = self.dataset['mfcc_' + style][:n_read] 
+            #self.mfccs[style] = self.dataset['mfcc_' + style][:n_read] 
             self.target_coords[style] = self.dataset['target_coords_' + style][:n_read] 
 
         self.n_data = self.pianoroll.shape[0]
@@ -99,7 +99,8 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         #mfcc_rand = self.mfccs[style][rand_index]
         song_id_rand, chunk_begin_index_rand, chunk_end_index_rand = self.target_coords[style][rand_index].astype('int')
         audio_chunk_rand = self.audios[f'audio_{song_id_rand}_{style}'][chunk_begin_index_rand: chunk_end_index_rand]
-        X_cond = self.torch_mfcc(torch.Tensor(audio_chunk_rand))
+        #X_cond = self.torch_mfcc(torch.Tensor(audio_chunk_rand))
+        X_cond = self.torch_melspec(torch.Tensor(audio_chunk_rand))
 
         # make target spectrogram
         song_id, chunk_begin_index, chunk_end_index = self.target_coords[style][index].astype('int')

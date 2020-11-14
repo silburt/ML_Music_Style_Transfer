@@ -51,6 +51,7 @@ def test_torchaudio_transforms():
         print(f"max difference (mel) = {max_diff}")
         print("min/max mel", np.min(mel), np.max(mel))
         print("min/max torch_mel", np.min(torch_mel), np.max(torch_mel))
+        assert mel.shape == torch_mel.shape
         #assert max_diff < 1e-4
 
         # mfcc - these seem to be different...
@@ -65,13 +66,14 @@ def test_torchaudio_transforms():
         # should allow for way more storage
         print(f"audio chunk size (bytes, shape) = {audio_chunk.nbytes}, {audio_chunk.shape}")
         print(f"spec size (bytes): {torch_spec.nbytes}, {torch_spec.shape}")
-        print(f"mel size (bytes): {mel.nbytes}, {mel.shape}")
+        print(f"mel size (bytes): {mel.nbytes}, {torch_mel.shape}")
         print(f"mfcc size (bytes): {mfcc.nbytes}, {mfcc.shape}")
 
         # plot
-        fig, ax = plt.subplots(2, 1, sharex=True)
-        librosa.display.specshow(mfcc, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[0])
-        librosa.display.specshow(torch_mfcc, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[1])
+        fig, ax = plt.subplots(3, 1, sharex=True)
+        librosa.display.specshow(spec, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[0])
+        librosa.display.specshow(torch_mel, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[1])
+        librosa.display.specshow(torch_mfcc, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[2])
         plt.show()
         plt.close()
     
