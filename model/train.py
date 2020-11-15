@@ -62,7 +62,7 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         # init specs
         self.torch_spectrogram = torchaudio.transforms.Spectrogram(n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
         melkwargs = {'hop_length': pp_hp.ws, 'n_fft': pp_hp.n_fft, }
-        self.torch_mfcc = torchaudio.transforms.MFCC(sample_rate=pp_hp.sr, n_mfcc=16, melkwargs=melkwargs) # didn't work - loss ~ 0.8 the whole time
+        self.torch_mfcc = torchaudio.transforms.MFCC(sample_rate=pp_hp.sr, n_mfcc=16, melkwargs=melkwargs)
         self.torch_melspec = torchaudio.transforms.MelSpectrogram(sample_rate=pp_hp.sr, n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
 
         if n_read is None:
@@ -125,10 +125,10 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
 
         if CUDA_FLAG == 1:
             X = torch.cuda.FloatTensor(pianoroll)
-            X_cond = torch.cuda.FloatTensor(X_cond)
-            y = torch.cuda.FloatTensor(y)
-            #X_cond = X_cond.to('cuda')
-            #y = y.to('cuda')
+            #X_cond = torch.cuda.FloatTensor(X_cond)
+            #y = torch.cuda.FloatTensor(y)
+            X_cond = X_cond.to('cuda')
+            y = y.to('cuda')
         else:
             X = torch.Tensor(pianoroll)
             X_cond = torch.Tensor(X_cond)
@@ -192,7 +192,7 @@ def train(model, epoch, train_loader, optimizer, iter_train_loss):
         train_loss += loss
         optimizer.step()    
          
-        if batch_idx % 4 == 0:
+        if batch_idx % 16 == 0:
             print ('Train Epoch: {} [{}/{} ({:.0f}%)]\t Loss: {:.6f}'.format(epoch, batch_idx * len(data), len(train_loader.dataset), 100. * batch_idx/len(train_loader), loss.item()/len(data)))
 
     print('====> Epoch: {} Average loss: {:.4f}'.format(epoch, train_loss/ len(train_loader.dataset)))
