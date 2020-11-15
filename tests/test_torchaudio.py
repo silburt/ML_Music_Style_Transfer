@@ -39,7 +39,7 @@ def test_torchaudio_transforms():
         audio_chunk = audio[(step * hp.ws * hp.stride): (step * hp.ws * hp.stride) + n_samples_per_chunk]
 
         # spec
-        spec = np.abs(librosa.stft(audio_chunk, n_fft=hp.n_fft, hop_length=hp.ws)) ** 2
+        spec = np.square(np.abs(librosa.stft(audio_chunk, n_fft=hp.n_fft, hop_length=hp.ws)))
         torch_spec = t_spec(torch.Tensor(audio_chunk)).detach().cpu().numpy()
         max_diff = np.max(np.abs(spec - torch_spec))
         print(f"max difference (spec) = {max_diff}")

@@ -11,6 +11,7 @@ import torch.nn as nn
 from torch.nn import init
 import torch.nn.functional as F
 import torchaudio
+import librosa
 import numpy as np
 import torch.optim as optim
 from sklearn.model_selection import train_test_split
@@ -113,19 +114,24 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
 
         # prepare input conditioning
         #X_cond = self.torch_mfcc(torch.Tensor(audio_chunk_rand))
-        X_cond = self.torch_melspec(torch.Tensor(audio_chunk_rand))
+        #X_cond = self.torch_melspec(torch.Tensor(audio_chunk_rand))
+        X_cond = librosa.feature.melspectrogram(y=audio_chunk_rand, sr=pp_hp.sr, 
+                                                n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
 
         # prepare target
-        y = self.torch_spectrogram(torch.Tensor(audio_chunk))
+        #y = self.torch_spectrogram(torch.Tensor(audio_chunk))
+        y = np.square(np.abs(librosa.stft(audio_chunk, n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)))
 
         if CUDA_FLAG == 1:
             X = torch.cuda.FloatTensor(pianoroll)
-            #X_cond = torch.cuda.FloatTensor(mfcc_rand)
-            X_cond = X_cond.to('cuda')
-            y = y.to('cuda')
+            X_cond = torch.cuda.FloatTensor(X_cond)
+            y = torch.cuda.FloatTensor(y)
+            #X_cond = X_cond.to('cuda')
+            #y = y.to('cuda')
         else:
             X = torch.Tensor(pianoroll)
-            #X_cond = torch.Tensor(mfcc_rand)
+            X_cond = torch.Tensor(X_cond)
+            y = torch.Tensor(y)
         return X, X_cond, y
 
     def __len__(self):
