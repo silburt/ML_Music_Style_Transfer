@@ -80,31 +80,42 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         random.seed(seed)
 
 
+    def select_piano_and_audio_chunks(self, index):
+       # piano
+        pianoroll = self.pianoroll[index]
+        onoff = self.onoff[index]
+
+        # pick random style
+        style = random.choice(self.styles)
+
+        # random audio_chunk of selected style for input conditioning
+        rand_index = random.randint(0, self.n_data - 1)
+        song_id_rand, chunk_begin_index_rand, chunk_end_index_rand = self.target_coords[style][rand_index].astype('int')
+        audio_chunk_rand = self.audios[f'audio_{song_id_rand}_{style}'][chunk_begin_index_rand: chunk_end_index_rand]
+        
+        # get correct audio_chunk of selected style for output target
+        song_id, chunk_begin_index, chunk_end_index = self.target_coords[style][index].astype('int')
+        audio_chunk = self.audios[f'audio_{song_id}_{style}'][chunk_begin_index: chunk_end_index]
+
+        return pianoroll, onoff, audio_chunk_rand, audio_chunk
+
+
     def __getitem__(self, index):
         '''
         The input data are the pianoroll, onoff, a random mfcc from the same style
         The output data is the spectrogram calculated on-the-fly (to save space) for the corresponding pianoroll/onoff
         '''
-        # piano
-        pianoroll = self.pianoroll[index]
-        onoff = self.onoff[index]
+        pianoroll, onoff, audio_chunk_rand, audio_chunk = self.select_piano_and_audio_chunks(index)
+
+        # prepare pianoroll
         pianoroll = np.concatenate((pianoroll, onoff), axis=-1)
         pianoroll = np.transpose(pianoroll, (1, 0))
 
-        # pick random style
-        style = random.choice(self.styles)
-
-        # random mfcc for selected style as input conditioning
-        rand_index = random.randint(0, self.n_data - 1)
-        #mfcc_rand = self.mfccs[style][rand_index]
-        song_id_rand, chunk_begin_index_rand, chunk_end_index_rand = self.target_coords[style][rand_index].astype('int')
-        audio_chunk_rand = self.audios[f'audio_{song_id_rand}_{style}'][chunk_begin_index_rand: chunk_end_index_rand]
+        # prepare input conditioning
         #X_cond = self.torch_mfcc(torch.Tensor(audio_chunk_rand))
         X_cond = self.torch_melspec(torch.Tensor(audio_chunk_rand))
 
-        # make target spectrogram
-        song_id, chunk_begin_index, chunk_end_index = self.target_coords[style][index].astype('int')
-        audio_chunk = self.audios[f'audio_{song_id}_{style}'][chunk_begin_index: chunk_end_index]
+        # prepare target
         y = self.torch_spectrogram(torch.Tensor(audio_chunk))
 
         if CUDA_FLAG == 1:

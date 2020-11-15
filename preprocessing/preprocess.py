@@ -21,6 +21,7 @@ from utils import io_manager
 
 ROOT_DIR = '/Users/arisilburt/Machine_Learning/ML_Music_Style_Transfer/'
 DEBUG_DIR = f'debugdir'
+DEBUG_PIANO_SCORES = [2533, 1760]
 
 class hyperparams(object):
     '''
@@ -70,16 +71,17 @@ def process_audio_into_chunks(audio, style, song_id, num_chunks, debug=False):
     spec_list=[]
     target_coords_list = []
     for step in range(num_chunks):
-        # get audio chunk 
-        #n_samples_per_chunk = hp.spc * hp.sr   # this should work, but below has -1 (like pnet) to get correct dimension...
+        # get number of audio samples per chunk 
         n_samples_per_chunk = (hp.spc * hp.wps - 1) * hp.ws
-        audio_chunk = audio[(step * hp.ws * hp.stride): (step * hp.ws * hp.stride) + n_samples_per_chunk]
         
         # get audio coordinates
         chunk_begin_index = step * hp.ws * hp.stride
         chunk_end_index = (step * hp.ws * hp.stride) + n_samples_per_chunk
         audio_chunk_coords = (song_id, chunk_begin_index, chunk_end_index)
         target_coords_list.append(audio_chunk_coords)
+
+        # get audio chunk
+        audio_chunk = audio[chunk_begin_index: chunk_end_index]
 
         # process mfcc (input conditioning) and append
         mfcc_chunk = process_spectrum_from_chunk(audio_chunk)
@@ -177,6 +179,13 @@ def load_midi(data_dir, song_id, ext='mixcraft', debug=False):
     return pianoroll, onoff
 
 
+def get_piano_scores(data_type, debug=False):
+    if debug is True:
+        return DEBUG_PIANO_SCORES
+    else:
+        return hp.piano_scores[data_type]
+
+
 def get_data(data_dir, dataset_outpath, data_type, debug=False):
     '''
     Extract the desired solo data from the dataset.
@@ -184,9 +193,11 @@ def get_data(data_dir, dataset_outpath, data_type, debug=False):
     
     h5pyname = f"{dataset_outpath}_{data_type}.hdf5"
     with h5py.File(h5pyname, 'w') as h5py_data:
+        # init
         data_manager = io_manager.h5pyManager(h5py_data)
+        piano_scores = get_piano_scores(data_type, debug=debug)
 
-        for song_id in hp.piano_scores[data_type]:
+        for song_id in piano_scores:
             # load midi
             pianoroll, onoff = load_midi(data_dir, song_id, debug=debug)
             num_chunks = get_num_song_chunks(pianoroll)
@@ -240,7 +251,7 @@ if __name__ == "__main__":
                         help="location to store results (data-type will be appended as well)")
     parser.add_argument("-data-type", type=str, default='train', choices=['train', 'test'],
                         help="type of data you are generating (train/test)")                                         
-    parser.add_argument("--debug", type=io_manager.str2bool, default=False, 
+    parser.add_argument("--debug", type=io_manager.str2bool, default=True, 
                         help="whether to run in debug mode or not - prints stuff and writes audio/midi samples " \
                              "to a directory so you can listen and confirm alignment is correct.")              
     args = parser.parse_args()

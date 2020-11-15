@@ -20,6 +20,11 @@ def normalize(arr):
     arr /= arr.max()
     return arr
 
+def sum_bins(arr):
+    sum_arr = np.asarray([np.sum(arr[:,i]) for i in range(arr.shape[1])])
+    print(sum_arr.shape)
+    return sum_arr
+
 def test_torchaudio_transforms():
     # init
     audio, sr = librosa.load(os.path.join("inputs", AUDIO_FILENAME), sr=hp.sr)
@@ -41,12 +46,8 @@ def test_torchaudio_transforms():
         assert max_diff < 1e-4
         
         # mel-spec - these seem to be different in magnitude but the same when viewing the images
-        mel = normalize(
-            librosa.feature.melspectrogram(y=audio_chunk, sr=hp.sr, n_fft=hp.n_fft, hop_length=hp.ws)
-        )
-        torch_mel = normalize(
-            t_melspec(torch.Tensor(audio_chunk)).detach().cpu().numpy()
-        )
+        mel = librosa.feature.melspectrogram(y=audio_chunk, sr=hp.sr, n_fft=hp.n_fft, hop_length=hp.ws)
+        torch_mel = t_melspec(torch.Tensor(audio_chunk)).detach().cpu().numpy()
         max_diff = np.max(np.abs(mel - torch_mel))
         print(f"max difference (mel) = {max_diff}")
         print("min/max mel", np.min(mel), np.max(mel))
@@ -70,12 +71,20 @@ def test_torchaudio_transforms():
         print(f"mfcc size (bytes): {mfcc.nbytes}, {mfcc.shape}")
 
         # plot
-        fig, ax = plt.subplots(3, 1, sharex=True)
-        librosa.display.specshow(spec, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[0])
-        librosa.display.specshow(torch_mel, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[1])
-        librosa.display.specshow(torch_mfcc, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[2])
+        # fig, ax = plt.subplots(3, 1, sharex=True)
+        # librosa.display.specshow(torch_spec, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[0])
+        # librosa.display.specshow(torch_mel, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[1])
+        # librosa.display.specshow(torch_mfcc, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[2])
+        # plt.show()
+        # plt.close()
+
+        # plot histograms 
+        fig, ax = plt.subplots(2, 1)
+        ax[0].hist(sum_bins(mfcc), bins=spec.shape[0]//2)
+        ax[1].hist(sum_bins(torch_mfcc), bins=torch_spec.shape[0]//2)
         plt.show()
         plt.close()
+
     
     print("test passes!")
 
