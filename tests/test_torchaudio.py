@@ -14,6 +14,7 @@ from preprocess import process_audio_into_chunks, hyperparams
 
 AUDIO_FILENAME = "2308_prelude18_harpsichord.wav"
 hp = hyperparams()
+N_MFCC = 16
 
 def normalize(arr):
     arr -= arr.mean()
@@ -30,7 +31,7 @@ def test_torchaudio_transforms():
     audio, sr = librosa.load(os.path.join("inputs", AUDIO_FILENAME), sr=hp.sr)
     t_spec = torchaudio.transforms.Spectrogram(n_fft=hp.n_fft, hop_length=hp.ws)
     melkwargs = {'hop_length': hp.ws, 'n_fft': hp.n_fft, }
-    t_mfcc = torchaudio.transforms.MFCC(sample_rate=hp.sr, n_mfcc=12, melkwargs=melkwargs)
+    t_mfcc = torchaudio.transforms.MFCC(sample_rate=hp.sr, n_mfcc=N_MFCC, melkwargs=melkwargs)
     t_melspec = torchaudio.transforms.MelSpectrogram(sample_rate=hp.sr, n_fft=hp.n_fft, hop_length=hp.ws)
 
     # test
@@ -56,7 +57,7 @@ def test_torchaudio_transforms():
         #assert max_diff < 1e-4
 
         # mfcc - these seem to be different...
-        mfcc = normalize(librosa.feature.mfcc(y=audio_chunk, sr=hp.sr, S=None, n_mfcc=12))
+        mfcc = normalize(librosa.feature.mfcc(y=audio_chunk, sr=hp.sr, S=None, n_mfcc=N_MFCC))
         torch_mfcc = normalize(t_mfcc(torch.Tensor(audio_chunk)).detach().cpu().numpy())
         print("min/max mfcc", np.min(mfcc), np.max(mfcc))
         print("min/max torch_mfcc", np.min(torch_mfcc), np.max(torch_mfcc))
@@ -71,19 +72,19 @@ def test_torchaudio_transforms():
         print(f"mfcc size (bytes): {mfcc.nbytes}, {mfcc.shape}")
 
         # plot
-        # fig, ax = plt.subplots(3, 1, sharex=True)
-        # librosa.display.specshow(torch_spec, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[0])
-        # librosa.display.specshow(torch_mel, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[1])
-        # librosa.display.specshow(torch_mfcc, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[2])
-        # plt.show()
-        # plt.close()
-
-        # plot histograms 
-        fig, ax = plt.subplots(2, 1)
-        ax[0].hist(sum_bins(mfcc), bins=spec.shape[0]//2)
-        ax[1].hist(sum_bins(torch_mfcc), bins=torch_spec.shape[0]//2)
+        fig, ax = plt.subplots(3, 1, sharex=True)
+        librosa.display.specshow(torch_spec, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[0])
+        librosa.display.specshow(torch_mel, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[1])
+        librosa.display.specshow(torch_mfcc, sr=hp.sr, hop_length=hp.ws, y_axis='linear', x_axis='time', ax=ax[2])
         plt.show()
         plt.close()
+
+        # plot histograms 
+        # fig, ax = plt.subplots(2, 1)
+        # ax[0].hist(sum_bins(mfcc), bins=spec.shape[0]//2)
+        # ax[1].hist(sum_bins(torch_mfcc), bins=torch_spec.shape[0]//2)
+        # plt.show()
+        # plt.close()
 
     
     print("test passes!")

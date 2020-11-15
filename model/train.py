@@ -61,8 +61,8 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
 
         # init specs
         self.torch_spectrogram = torchaudio.transforms.Spectrogram(n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
-        #melkwargs = {'hop_length': pp_hp.ws, 'n_fft': pp_hp.n_fft, }
-        #self.torch_mfcc = torchaudio.transforms.MFCC(sample_rate=pp_hp.sr, n_mfcc=12, melkwargs=melkwargs) # didn't work - loss ~ 0.8 the whole time
+        melkwargs = {'hop_length': pp_hp.ws, 'n_fft': pp_hp.n_fft, }
+        self.torch_mfcc = torchaudio.transforms.MFCC(sample_rate=pp_hp.sr, n_mfcc=16, melkwargs=melkwargs) # didn't work - loss ~ 0.8 the whole time
         self.torch_melspec = torchaudio.transforms.MelSpectrogram(sample_rate=pp_hp.sr, n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
 
         if n_read is None:
@@ -113,14 +113,15 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         pianoroll = np.transpose(pianoroll, (1, 0))
 
         # prepare input conditioning
-        #X_cond = self.torch_mfcc(torch.Tensor(audio_chunk_rand))
+        X_cond = self.torch_mfcc(torch.Tensor(audio_chunk_rand))
         #X_cond = self.torch_melspec(torch.Tensor(audio_chunk_rand))
-        X_cond = librosa.feature.melspectrogram(y=audio_chunk_rand, sr=pp_hp.sr, 
-                                                n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
+        #X_cond = librosa.feature.melspectrogram(y=audio_chunk_rand, sr=pp_hp.sr, 
+        #                                        n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
 
         # prepare target
         #y = self.torch_spectrogram(torch.Tensor(audio_chunk))
-        y = np.square(np.abs(librosa.stft(audio_chunk, n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)))
+        #y = np.square(np.abs(librosa.stft(audio_chunk, n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)))
+        y = torch.log1p(self.torch_spectrogram(torch.Tensor(audio_chunk)))
 
         if CUDA_FLAG == 1:
             X = torch.cuda.FloatTensor(pianoroll)
