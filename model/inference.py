@@ -1,5 +1,6 @@
 import argparse
 import torch
+import torchaudio
 import pretty_midi
 import numpy as np
 import h5py
@@ -17,6 +18,7 @@ sys.path.append('../preprocessing/')
 from preprocess import process_spectrum_from_chunk, hyperparams
 
 pp_hp = hyperparams()
+DEBUG=True
 
 
 class AudioSynthesizer():
@@ -34,7 +36,7 @@ class AudioSynthesizer():
         score = [X[i] for i in rand]
         return torch.Tensor(score).cuda()
 
-    def process_custom_midi_and_audio(self, midi_filename, audio_filename):
+    def process_custom_midi_and_audio(self, midi_filename, audio_filename, cond_type='mel'):
         # process midi
         midi_dir = os.path.join(self.exp_dir, 'midi')
         midi = pretty_midi.PrettyMIDI(os.path.join(midi_dir, midi_filename))    
@@ -52,27 +54,30 @@ class AudioSynthesizer():
         
         # process audio
         audio, sr = librosa.load(audio_filename, sr=pp_hp.sr)
-        spec = process_spectrum_from_chunk(audio)
+        if cond_type == 'mfcc':
+            melkwargs = {'hop_length': pp_hp.ws, 'n_fft': pp_hp.n_fft, }
+            torch_mfcc = torchaudio.transforms.MFCC(sample_rate=pp_hp.sr, n_mfcc=16, melkwargs=melkwargs)
+            cond = torch_mfcc(torch.Tensor(audio)).unsqueeze(0).to('cuda')
+        elif cond_type == 'mel':
+            torch_melspec = torchaudio.transforms.MelSpectrogram(sample_rate=pp_hp.sr, n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
+            cond = torch_melspec(torch.Tensor(audio)).unsqueeze(0).to('cuda')
+
+        #spec = process_spectrum_from_chunk(audio)
         #spec = librosa.stft(audio, n_fft=process_hp.n_fft, hop_length=process_hp.stride)
         #magnitude = np.log1p(np.abs(spec)**2)
 
         # convert to Tensors
         pianoroll = torch.cuda.FloatTensor(pianoroll).unsqueeze(0)
         onoff = torch.cuda.FloatTensor(onoff).unsqueeze(0)
-        spec = torch.cuda.FloatTensor(spec).unsqueeze(0)
+        #spec = torch.cuda.FloatTensor(spec).unsqueeze(0)
         #X = torch.Tensor(score)
         #y = torch.Tensor(spec)
 
-        # reshape into a batch with proper dims
-        # TODO: Make this better...
-        #pianoroll = pianoroll[:128, :860]
-        #onoff = onoff[:128, :860]
-        #spec = spec[:1025, :860]
-        return pianoroll, onoff, spec
+        return pianoroll, onoff, cond, audio
 
 
     def inference(self):
-        score, onoff, spec = self.process_custom_midi_and_audio(self.midi_source, self.audio_source)
+        score, onoff, spec, audio = self.process_custom_midi_and_audio(self.midi_source, self.audio_source)
 
         model = PerformanceNet().cuda()
         model.load_state_dict(self.checkpoint['state_dict'])
@@ -90,6 +95,17 @@ class AudioSynthesizer():
             audio = self.griffinlim(test_results[i], audio_id = i+1)
             sf.write(os.path.join(output_dir,'output-{}.wav'.format(i+1)), audio, self.sample_rate)
     
+            if DEBUG is True:
+                print("plotting specs")
+                import matplotlib.pyplot as plt
+                import librosa.display
+                torch_spec = torchaudio.transforms.Spectrogram(n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
+                target = torch_spec(torch.Tensor(audio_chunk)).detach().cpu().numpy()
+                fig, ax = plt.subplots(2, 1, sharex=True)
+                librosa.display.specshow(target, sr=pp_hp.sr, hop_length=pp_hp.ws, y_axis='linear', x_axis='time', ax=ax[0])
+                librosa.display.specshow(test_results[i], sr=pp_hp.sr, hop_length=pp_hp.ws, y_axis='linear', x_axis='time', ax=ax[0])
+                plt.savefig(os.path.join(output_dir,'output-{}.png'.format(i+1)))
+
     def create_output_dir(self):
         success = False
         dir_id = 1
@@ -103,11 +119,10 @@ class AudioSynthesizer():
         return audio_out_dir
 
     def griffinlim(self, spectrogram, audio_id, n_iter=300, window='hann', n_fft=2048, hop_length=256, verbose=False):
-        # from test_griffinlim.py this seems to work well
-        # this is the inverse transform of what is done in preprocess.py, i.e. np.log1p(np.abs(spec)**2) to get it back to 
-        # a standard spectrogram
-        magnitude = np.sqrt(np.expm1(np.clip(spectrogram, 0, 20))) 
-        return librosa.griffinlim(magnitude, n_iter=n_iter, window=window, win_length=n_fft, hop_length=hop_length)
+        #magnitude = np.sqrt(np.expm1(np.clip(spectrogram, 0, 20))) 
+        #return librosa.griffinlim(magnitude, n_iter=n_iter, window=window, win_length=n_fft, hop_length=hop_length)
+        griffinlim = torchaudio.transforms.GriffinLim(n_fft=pp_hp.n_fft, n_iter=300, win_length=pp_hp.n_fft, hop_length=pp_hp.ws)
+        return griffinlim(spectrogram).detach().cpu().numpy()
 
 def main():
     parser = argparse.ArgumentParser()

@@ -1,4 +1,7 @@
 # TODO: Need to determine whether normalization needs to happen or not in some layer
+# TODO: As said in this video you have to reduce the number of dimensions to learn the features? 
+# On the other hand... that was for classification. With style transfer maybe you want more?
+# https://youtu.be/KJzxxIZICNI?t=366
 
 import torch
 import torch.nn as nn
