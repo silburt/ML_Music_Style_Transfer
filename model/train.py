@@ -31,6 +31,8 @@ from preprocess import hyperparams as pp_hyperparams
 
 pp_hp = pp_hyperparams()
 
+LARGE_NUMBER = 10000000
+
 CUDA_FLAG = 0
 if torch.cuda.is_available():
     cuda = torch.device("cuda")
@@ -66,7 +68,7 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         #self.torch_melspec = torchaudio.transforms.MelSpectrogram(sample_rate=pp_hp.sr, n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
 
         if n_read is None:
-            n_read = 10000000   # large number to read everything
+            n_read = LARGE_NUMBER   # large number to read everything
 
         self.pianoroll = self.dataset['pianoroll'][:n_read]
         self.onoff = self.dataset['onoff'][:n_read]
@@ -81,8 +83,9 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
 
         self.spec_precal = None
         if n_spec_precal is not None:
-            n_spec_precal = min(self.n_data, n_spec_precal)
+            n_spec_precal = self.n_data if n_spec_precal == -1 else min(self.n_data, n_spec_precal)
             print(f"Precalculating {n_spec_precal} specs to store in memory")
+
             spec_precal = []
             for index in range(n_spec_precal):
                 _, _, audio_chunk_rand, _ = self.select_piano_and_audio_chunks(index)
@@ -280,7 +283,7 @@ if __name__ == "__main__":
     parser.add_argument("-exp-name", type=str, default='piano_test')
     parser.add_argument("--n-train-read", type=int, default=None, help='How many data points to read (length of an epoch)')
     parser.add_argument("--n-test-read", type=int, default=None, help='How many data points to read (length of an epoch)')
-    parser.add_argument("--n-train-spec-precal", type=int, default=1000, help='How many spectrograms to precalculate')
+    parser.add_argument("--n-train-spec-precal", type=int, default=None, help='How many spectrograms to precalculate')
     parser.add_argument("--batch-size", type=int, default=16)
     args = parser.parse_args()
     
