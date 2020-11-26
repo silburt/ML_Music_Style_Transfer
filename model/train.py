@@ -253,7 +253,7 @@ def main(args):
     optimizer.zero_grad()
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
     train_loader, test_loader = Process_Data(args.data_dir, n_train_read=args.n_train_read, n_test_read=args.n_test_read, 
-                                             batch_size=args.batch_size, n_train_spec_precal=n_train_spec_precal)
+                                             batch_size=args.batch_size, n_train_spec_precal=args.n_train_spec_precal)
     print ('start training')
     for epoch in range(hp.train_epoch):
         loss = train(model, epoch, train_loader, optimizer, hp.iter_train_loss)
