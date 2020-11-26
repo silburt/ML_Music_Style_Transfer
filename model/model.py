@@ -180,7 +180,7 @@ class MBRBlock(nn.Module):
 
 
 class PerformanceNet(nn.Module):
-    def __init__(self, depth=5, start_channels=128, start_audio_cond_channels=16): #start_audio_channels=1025):
+    def __init__(self, depth=5, start_channels=128, start_audio_cond_channels=1025):
         super(PerformanceNet, self).__init__()
         self.depth = depth
         self.start_channels = start_channels 
@@ -203,31 +203,25 @@ class PerformanceNet(nn.Module):
         self.down_convs = nn.ModuleList(self.down_convs)
         
         # down convs audio
-        #outs_channel_list_audio = [int(1024*1.5), 2048, int(2048*1.5), 4096, int(4096*1.5)] # for specs
-        outs_channel_list_audio = []
+        outs_channel_list_audio = [int(1025*1.5), 2050, int(2050*1.5), 4100, int(4100*1.5)] # for specs
+        #outs_channel_list_audio = []
         self.down_convs_audio = []
         for i in range(self.depth):
             ins = self.start_audio_cond_channels if i == 0 else outs
-            outs = self.start_audio_cond_channels * (2 ** (i+1))
-            outs_channel_list_audio.append(outs)
-            #outs = outs_channel_list_audio[i]
-            #outs = min(self.start_audio_channels * (2 ** (i+1)), 4096)
+            #outs = self.start_audio_cond_channels * (2 ** (i+1))
+            #outs_channel_list_audio.append(outs)
+            outs = outs_channel_list_audio[i]
             pooling = True if i < self.depth-1 else False
             DC = DownConv(ins, outs, pooling=pooling, block_id=i)
             self.down_convs_audio.append(DC)  
         self.down_convs_audio = nn.ModuleList(self.down_convs_audio)
 
         # dense layers 
-        # in_channels, intermediate_channels, out_channels
         self.dense_concats = []
         for i in range(self.depth):
             out_midi = outs_channel_list_midi[-(i+1)]
             out_audio = outs_channel_list_audio[-(i+1)]
             self.dense_concats.append(DenseConcat(out_midi + out_audio, int(out_midi * 1.5), out_midi)) 
-        # self.dense_concats.append(DenseConcat(4096 * 2, int(4096 * 1.5), 4096)) 
-        # self.dense_concats.append(DenseConcat(2048 * 2, int(2048 * 1.5), 2048))
-        # self.dense_concats.append(DenseConcat(1024 * 2, int(1024 * 1.5), 1024))
-        # self.dense_concats.append(DenseConcat(512 * 2, int(512 * 1.5), 512))
         self.dense_concats = nn.ModuleList(self.dense_concats)
 
         # up convs

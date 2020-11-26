@@ -61,9 +61,9 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
 
         # init specs
         self.torch_spectrogram = torchaudio.transforms.Spectrogram(n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
-        melkwargs = {'hop_length': pp_hp.ws, 'n_fft': pp_hp.n_fft, }
-        self.torch_mfcc = torchaudio.transforms.MFCC(sample_rate=pp_hp.sr, n_mfcc=16, melkwargs=melkwargs)
-        self.torch_melspec = torchaudio.transforms.MelSpectrogram(sample_rate=pp_hp.sr, n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
+        #melkwargs = {'hop_length': pp_hp.ws, 'n_fft': pp_hp.n_fft, }
+        #self.torch_mfcc = torchaudio.transforms.MFCC(sample_rate=pp_hp.sr, n_mfcc=16, melkwargs=melkwargs)
+        #self.torch_melspec = torchaudio.transforms.MelSpectrogram(sample_rate=pp_hp.sr, n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
 
         if n_read is None:
             n_read = 10000000   # large number to read everything
@@ -74,7 +74,6 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         self.target_coords = {}
         for style in self.styles:
             print(f"loading style: {style}")
-            #self.mfccs[style] = self.dataset['mfcc_' + style][:n_read] 
             self.target_coords[style] = self.dataset['target_coords_' + style][:n_read] 
 
         self.n_data = self.pianoroll.shape[0]
@@ -120,7 +119,7 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         #                                        n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
 
         # prepare target
-        y = torch.log1p(self.torch_spectrogram(torch.Tensor(audio_chunk)))
+        y = self.torch_spectrogram(torch.Tensor(audio_chunk))  # no log1p, done later in loss function
         #y = self.torch_spectrogram(torch.Tensor(audio_chunk))
         #y = np.square(np.abs(librosa.stft(audio_chunk, n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)))
 
@@ -158,18 +157,12 @@ class L2L1Loss:
         self.l2 = nn.MSELoss()
         self.alpha = alpha
 
-    def _normalize(self, spec):
-        spec -= spec.min(1, keepdim=True)[0]
-        spec /= spec.max(1, keepdim=True)[0]
-        return spec
-
     def __call__(self, pred, target):
         # From Engel (2017), Nsynth paper - We found that training on the log magnitude of the power spectra, 
         # peak normalized to be between 0 and 1, correlated better with perceptual distortion.
-        # NOTE: They have already have log1p applied in __getitem__
-        pred_norm = self._normalize(pred)
-        target_norm = self._normalize(target)
-        total_loss = self.l2(pred_norm, target_norm) + self.alpha * self.l1(pred_norm, target_norm)
+        pred = torch.log1p(torch.clamp(pred, min=0))
+        target = torch.log1p(target)
+        total_loss = self.l2(pred, target) + self.alpha * self.l1(pred, target)
         return total_loss
 
 
