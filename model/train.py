@@ -158,12 +158,12 @@ class L2L1Loss:
         self.l2 = nn.MSELoss()
         self.alpha = alpha
 
-    def _normalize_spectrum(self, spec):
+    def _normalize(self, spec):
         spec -= spec.min(1, keepdim=True)[0]
         spec /= spec.max(1, keepdim=True)[0]
         return spec
 
-    def loss(self, pred, target):
+    def __call__(self, pred, target):
         # From Engel (2017), Nsynth paper - We found that training on the log magnitude of the power spectra, 
         # peak normalized to be between 0 and 1, correlated better with perceptual distortion.
         # NOTE: They have already have log1p applied in __getitem__
@@ -171,7 +171,6 @@ class L2L1Loss:
         target_norm = self._normalize(target)
         total_loss = self.l2(pred_norm, target_norm) + self.alpha * self.l1(pred_norm, target_norm)
         return total_loss
-
 
 
 def train(model, epoch, train_loader, optimizer, iter_train_loss):
