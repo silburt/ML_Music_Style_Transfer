@@ -81,7 +81,8 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
 
         self.spec_precal = None
         if n_spec_precal is not None:
-            print(f"Precalculating {n_spec_precal} to store in memory")
+            n_spec_precal = min(self.n_data, n_spec_precal)
+            print(f"Precalculating {n_spec_precal} specs to store in memory")
             spec_precal = []
             for index in range(n_spec_precal):
                 _, _, audio_chunk_rand, _ = self.select_piano_and_audio_chunks(index)
@@ -131,7 +132,7 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         pianoroll = np.transpose(pianoroll, (1, 0))
 
         # prepare input conditioning
-        X_cond = self.n_spec_precal[index] if (self.n_spec_precal is not None and index < self.n_spec_precal) else self._calc_input_conditioning(audio_chunk_rand)
+        X_cond = self.spec_precal[index] if (self.n_spec_precal is not None and index < self.n_spec_precal) else self._calc_input_conditioning(audio_chunk_rand)
 
         # prepare target
         y = self.torch_spectrogram(torch.Tensor(audio_chunk))  # no log1p, done later in loss function
@@ -154,11 +155,11 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         return self.n_data
 
 
-def Process_Data(data_dir, n_train_read=None, n_test_read=None, batch_size=16):
+def Process_Data(data_dir, n_train_read=None, n_test_read=None, batch_size=16, n_train_spec_precal=1000):
     print("loading training data")
-    train_dataset = DatasetPreprocessRealTime(data_dir + '_train.hdf5', n_read=n_train_read)
+    train_dataset = DatasetPreprocessRealTime(data_dir + '_train.hdf5', n_read=n_train_read, n_spec_precal=n_train_spec_precal)
     print("loading test data")
-    test_dataset = DatasetPreprocessRealTime(data_dir + '_test.hdf5', n_read=n_test_read)
+    test_dataset = DatasetPreprocessRealTime(data_dir + '_test.hdf5', n_read=n_test_read, n_spec_precal=None)
 
     kwargs = {}
     train_loader = utils.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, **kwargs)
@@ -251,7 +252,8 @@ def main(args):
     model.zero_grad()
     optimizer.zero_grad()
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
-    train_loader, test_loader = Process_Data(args.data_dir, n_train_read=args.n_train_read, n_test_read=args.n_test_read, batch_size=args.batch_size)
+    train_loader, test_loader = Process_Data(args.data_dir, n_train_read=args.n_train_read, n_test_read=args.n_test_read, 
+                                             batch_size=args.batch_size, n_train_spec_precal=n_train_spec_precal)
     print ('start training')
     for epoch in range(hp.train_epoch):
         loss = train(model, epoch, train_loader, optimizer, hp.iter_train_loss)
@@ -278,6 +280,7 @@ if __name__ == "__main__":
     parser.add_argument("-exp-name", type=str, default='piano_test')
     parser.add_argument("--n-train-read", type=int, default=None, help='How many data points to read (length of an epoch)')
     parser.add_argument("--n-test-read", type=int, default=None, help='How many data points to read (length of an epoch)')
+    parser.add_argument("--n-train-spec-precal", type=int, default=1000, help='How many spectrograms to precalculate')
     parser.add_argument("--batch-size", type=int, default=16)
     args = parser.parse_args()
     
