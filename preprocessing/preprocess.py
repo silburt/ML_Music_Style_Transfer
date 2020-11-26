@@ -1,7 +1,4 @@
 # TODO: So I think what you actually should do now for preprocessing is:
-# - get the pianoroll/onoff -> store -> should this be slightly smaller?? 128 keys is probably overkill...
-# - get the mfcc -> store
-# - for each data point store the (song, beginning, end) coordinates to grab the audio chunk and turn it into spectrogram on the fly
 # - store all the audio clips
 # - Need to figure out how to properly normalize everything
 
@@ -68,7 +65,6 @@ def process_spectrum_from_chunk(audio_chunk):
 
 def process_audio_into_chunks(audio, style, song_id, num_chunks, debug=False):
     print(f"processing {style} style for song_id {song_id}")
-    spec_list=[]
     target_coords_list = []
     for step in range(num_chunks):
         # get number of audio samples per chunk 
@@ -80,18 +76,16 @@ def process_audio_into_chunks(audio, style, song_id, num_chunks, debug=False):
         audio_chunk_coords = (song_id, chunk_begin_index, chunk_end_index)
         target_coords_list.append(audio_chunk_coords)
 
-        # get audio chunk
-        audio_chunk = audio[chunk_begin_index: chunk_end_index]
-
         # process mfcc (input conditioning) and append
-        mfcc_chunk = process_spectrum_from_chunk(audio_chunk)
-        spec_list.append(mfcc_chunk)
+        #mfcc_chunk = process_spectrum_from_chunk(audio_chunk)
+        #spec_list.append(mfcc_chunk)
 
         # check that the windowing alignment between midi/audio is correct
         if debug == True:
+            audio_chunk = audio[chunk_begin_index: chunk_end_index]
             io_manager.write_chunked_samples(DEBUG_DIR, song_id, step, hp, style=style, audio_chunk=audio_chunk)
         
-    return np.array(spec_list), np.array(target_coords_list)
+    return np.array(target_coords_list)
 
 
 def process_pianoroll_into_chunks(pianoroll, onoff, song_id, num_chunks, debug=False):
@@ -113,7 +107,7 @@ def process_pianoroll_into_chunks(pianoroll, onoff, song_id, num_chunks, debug=F
     return np.array(score_list), np.array(onoff_list)
 
 
-def load_audio(data_dir, song_id, style, debug=False):
+def load_audio(data_dir, song_id, style):
     audio_file = glob.glob(f"{data_dir}/{song_id}*{style}.wav")
     if len(audio_file) == 0:
         raise ValueError("couldnt find audio track!")
@@ -121,14 +115,6 @@ def load_audio(data_dir, song_id, style, debug=False):
         raise ValueError("multiple files picked up, issue:", audio_file)
 
     y, sr = librosa.load(audio_file[0], sr=hp.sr)
-    if debug is True:
-        #tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
-        #beat_times = librosa.frames_to_time(beat_frames, sr=sr)
-        #print("tempo: ", tempo)
-        #print("beat times", beat_times)
-        #print("beat frames:", beat_frames)
-        print("length of audio clip / sr: ", len(y), sr)
-        print("audio files picked up:", audio_file)
     return y
 
 
@@ -211,21 +197,20 @@ def get_data(data_dir, dataset_outpath, data_type, debug=False):
             for style in hp.styles:
                 # load audio
                 try:
-                    audio = load_audio(data_dir, song_id, style, debug=debug)
+                    audio = load_audio(data_dir, song_id, style)
                 except:
                     # not all styles exist for all midi...
                     print(f"Couldnt load audio for song={song_id}, style={style}, skipping...")
                     continue
 
-                # process into chunks
-                mfcc_list, target_coords_list = process_audio_into_chunks(audio, style, song_id, num_chunks, debug=debug)
+                # get audio coords
+                target_coords_list = process_audio_into_chunks(audio, style, song_id, num_chunks, debug=debug)
                 
                 # write
-                data_manager.write_audio_features(mfcc_list, target_coords_list, style)
+                data_manager.write_audio_features(target_coords_list, style)
                 data_manager.write_audio(audio, song_id, style)
 
                 if debug is True:
-                    assert pianoroll_list.shape[0] == mfcc_list.shape[0]
                     assert pianoroll_list.shape == onoff_list.shape
 
 
@@ -250,7 +235,7 @@ if __name__ == "__main__":
     parser.add_argument("-dataset-outpath", type=str, default=f'{ROOT_DIR}/preprocessing/data_products/style_transfer', 
                         help="location to store results (data-type will be appended as well)")
     parser.add_argument("-data-type", type=str, default='train', choices=['train', 'test'],
-                        help="type of data you are generating (train/test)")                                         
+                        help="type of data you are generating (train/test)")
     parser.add_argument("--debug", type=io_manager.str2bool, default=False, 
                         help="whether to run in debug mode or not - prints stuff and writes audio/midi samples " \
                              "to a directory so you can listen and confirm alignment is correct.")              

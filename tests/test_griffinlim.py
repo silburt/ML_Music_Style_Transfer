@@ -45,6 +45,13 @@ def test_torchgriffinlim():
     audio_chunk = audio[(step * hp.ws * hp.stride): (step * hp.ws * hp.stride) + n_samples_per_chunk]
     spec = t_spec(torch.Tensor(audio_chunk))
 
+    # test normalization - so it seems that log1p or normalizing the spectrogram degrades griffin-lim quite a bit
+    # SO you just apply these transformations when calculating the loss, not the raw model prediction
+    #spec -= spec.min(1, keepdim=True)[0]
+    #spec /= spec.max(1, keepdim=True)[0]
+    #spec = torch.log1p(spec)
+    #print("min/max values in spec", torch.min(spec), torch.max(spec))
+
     # convert back to audio
     inverse = griffinlim(spec).detach().cpu().numpy()
     sf.write(f'outputs/test_griffinlim_{song_id}_{style_id}_sr{hp.sr}_torch.wav', inverse, hp.sr)

@@ -54,7 +54,7 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         super(DatasetPreprocessRealTime, self).__init__()
 
         self.dataset = h5py.File(in_file, 'r')
-        self.styles = [name.split('mfcc_')[1] for name in self.dataset.keys() if 'mfcc_' in name] # get styles from the data
+        self.styles = [name.split('target_coords_')[1] for name in self.dataset.keys() if 'target_coords_' in name] # get styles from the data
 
         # load all the raw audio files
         self.audios = {key: self.dataset[key] for key in self.dataset.keys() if 'audio_' in key}
@@ -113,15 +113,16 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         pianoroll = np.transpose(pianoroll, (1, 0))
 
         # prepare input conditioning
-        X_cond = self.torch_mfcc(torch.Tensor(audio_chunk_rand))
+        X_cond = torch.log1p(self.torch_spectrogram(torch.Tensor(audio_chunk_rand)))
+        #X_cond = self.torch_mfcc(torch.Tensor(audio_chunk_rand))
         #X_cond = self.torch_melspec(torch.Tensor(audio_chunk_rand))
         #X_cond = librosa.feature.melspectrogram(y=audio_chunk_rand, sr=pp_hp.sr, 
         #                                        n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
 
         # prepare target
+        y = torch.log1p(self.torch_spectrogram(torch.Tensor(audio_chunk)))
         #y = self.torch_spectrogram(torch.Tensor(audio_chunk))
         #y = np.square(np.abs(librosa.stft(audio_chunk, n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)))
-        y = torch.log1p(self.torch_spectrogram(torch.Tensor(audio_chunk)))
 
         if CUDA_FLAG == 1:
             X = torch.cuda.FloatTensor(pianoroll)
@@ -151,41 +152,42 @@ def Process_Data(data_dir, n_train_read=None, n_test_read=None, batch_size=16):
     return train_loader, test_loader
 
 
-class EngelLoss:
-    def __init__(self, n_mels=128, alpha=1):
-        # loss from https://arxiv.org/abs/2001.04643
-        self.loss_function = nn.L1Loss()
-        self.mel_scale = torchaudio.transforms.MelScale(n_mels=n_mels, sample_rate=pp_hp.sr)
+class L2L1Loss:
+    def __init__(self, alpha=1):
+        self.l1 = nn.L1Loss()
+        self.l2 = nn.MSELoss()
         self.alpha = alpha
 
-    def loss(self, pred, target):
-        mel_pred = self.mel_scale(pred)
-        mel_target = self.mel_scale(target)
-        if CUDA_FLAG == 1:
-            mel_pred = mel_pred.to('cuda')
-            mel_target = mel_target.to('cuda')
+    def _normalize_spectrum(self, spec):
+        spec -= spec.min(1, keepdim=True)[0]
+        spec /= spec.max(1, keepdim=True)[0]
+        return spec
 
-        loss_1 = self.loss_function(pred, target)
-        loss_2 = self.loss_function(mel_pred, mel_target)
-        total_loss = loss_1 + self.alpha * loss_2
+    def loss(self, pred, target):
+        # From Engel (2017), Nsynth paper - We found that training on the log magnitude of the power spectra, 
+        # peak normalized to be between 0 and 1, correlated better with perceptual distortion.
+        # NOTE: They have already have log1p applied in __getitem__
+        pred_norm = self._normalize(pred)
+        target_norm = self._normalize(target)
+        total_loss = self.l2(pred_norm, target_norm) + self.alpha * self.l1(pred_norm, target_norm)
         return total_loss
+
 
 
 def train(model, epoch, train_loader, optimizer, iter_train_loss):
     model.train()
     train_loss = 0
-    #engel_loss = EngelLoss()
+    loss_function = L2L1Loss()
+    #loss_function = nn.L1Loss()
     for batch_idx, (data, data_cond, target) in enumerate(train_loader):        
         optimizer.zero_grad()
         split = torch.split(data, 128, dim=1)
-        loss_function = nn.L1Loss()
         if CUDA_FLAG == 1:
             y_pred = model(split[0].cuda(), data_cond.cuda(), split[1].cuda())
             target = target.cuda()
         else:
             y_pred = model(split[0], data_cond, split[1]) 
         
-        #loss = engel_loss.loss(y_pred, target)
         loss = loss_function(y_pred, target)
         loss.backward()
         iter_train_loss.append(loss.item())
@@ -203,8 +205,8 @@ def test(model, epoch, test_loader, scheduler, iter_test_loss):
     with torch.no_grad():
         model.eval()
         test_loss = 0
-        #engel_loss = EngelLoss()
-        loss_function = nn.L1Loss()
+        #loss_function = nn.L1Loss()
+        loss_function = L2L1Loss()
         for idx, (data, data_cond, target) in enumerate(test_loader):
             split = torch.split(data, 128, dim=1)
             if CUDA_FLAG == 1:
@@ -214,7 +216,6 @@ def test(model, epoch, test_loader, scheduler, iter_test_loss):
             else:
                 y_pred = model(split[0], data_cond, split[1])
             
-            #loss = engel_loss.loss(y_pred, target)
             loss = loss_function(y_pred, target)
             iter_test_loss.append(loss.item())
             test_loss += loss    

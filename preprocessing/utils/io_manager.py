@@ -61,24 +61,19 @@ class h5pyManager():
             self.data["onoff"].resize(self.data["onoff"].shape[0] + onoff_list.shape[0], axis=0)
             self.data["onoff"][-onoff_list.shape[0]:] = onoff_list
 
-    def write_audio_features(self, mfcc_list, target_coords_list, style):
+    def write_audio_features(self, target_coords_list, style):
         '''
         Create and incrementally add to an h5py file, so you don't have to fit everything into memory
         '''
-        key_name = f'mfcc_{style}'
         target_name = f'target_coords_{style}'
-        if key_name not in self.data:
+        if target_name not in self.data:
             # create
-            self.data.create_dataset(key_name, data=mfcc_list, dtype='float32', maxshape=(None,) + mfcc_list.shape[1:], chunks=True)
             self.data.create_dataset(target_name, data=target_coords_list, dtype='int', maxshape=(None,) + target_coords_list.shape[1:], chunks=True) 
         else:
-            # append
-            self.data[key_name].resize(self.data[key_name].shape[0] + mfcc_list.shape[0], axis=0)
-            self.data[key_name][-mfcc_list.shape[0]:] = mfcc_list
-
             self.data[target_name].resize(self.data[target_name].shape[0] + target_coords_list.shape[0], axis=0)
             self.data[target_name][-target_coords_list.shape[0]:] = target_coords_list
 
     def write_audio(self, audio, song_id, style):
         key_name = f"audio_{song_id}_{style}"
         self.data.create_dataset(key_name, data=audio, dtype='float32', maxshape=(None,) + audio.shape[1:], chunks=True)
+

@@ -35,13 +35,13 @@ def test_torchaudio_transforms():
     t_melspec = torchaudio.transforms.MelSpectrogram(sample_rate=hp.sr, n_fft=hp.n_fft, hop_length=hp.ws)
 
     # test
-    for step in range(1):
+    for step in range(5):
         n_samples_per_chunk = (hp.spc * hp.wps - 1) * hp.ws
         audio_chunk = audio[(step * hp.ws * hp.stride): (step * hp.ws * hp.stride) + n_samples_per_chunk]
 
         # spec
-        spec = np.square(np.abs(librosa.stft(audio_chunk, n_fft=hp.n_fft, hop_length=hp.ws)))
-        torch_spec = t_spec(torch.Tensor(audio_chunk)).detach().cpu().numpy()
+        spec = np.log1p(np.square(np.abs(librosa.stft(audio_chunk, n_fft=hp.n_fft, hop_length=hp.ws))))
+        torch_spec = torch.log1p(t_spec(torch.Tensor(audio_chunk))).detach().cpu().numpy()
         max_diff = np.max(np.abs(spec - torch_spec))
         print(f"max difference (spec) = {max_diff}")
         assert max_diff < 1e-4
@@ -71,9 +71,14 @@ def test_torchaudio_transforms():
         print(f"mel size (bytes): {mel.nbytes}, {torch_mel.shape}")
         print(f"mfcc size (bytes): {mfcc.nbytes}, {mfcc.shape}")
 
+        # normalize spec
+        norma_spec = torch_spec - np.min(torch_spec, axis=0)
+        norma_spec /= np.max(norma_spec, axis=0)
+        print("min/max values in spec", np.min(norma_spec), np.max(norma_spec))
+
         # plot
         fig, ax = plt.subplots(3, 1, sharex=True)
-        librosa.display.specshow(torch_spec, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[0])
+        librosa.display.specshow(norma_spec, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[0])
         librosa.display.specshow(torch_mel, sr=hp.sr, hop_length=hp.ws, y_axis='log', x_axis='time', ax=ax[1])
         librosa.display.specshow(torch_mfcc, sr=hp.sr, hop_length=hp.ws, y_axis='linear', x_axis='time', ax=ax[2])
         plt.show()
