@@ -60,3 +60,13 @@ STRUCTURED AUTOMATIC MUSIC](https://arxiv.org/pdf/1806.09905.pdf) - this may be 
 
 ### Tips and tricks
 - [this video](https://www.youtube.com/watch?v=Z7YM-HAz-IY&ab_channel=SethAdams) - downsample audio so that nyquist frequency is lower, and thus naturally remove some of the high frequency noise.
+
+### Progress So Far
+- Can more-or-less reproduce their results in [this branch](https://github.com/silburt/PerformanceNet/tree/orig-plus-mods) - only modification is generating spectrograms at runtime which makes things slower but allows everything to fit in memory
+- Most successful attempt so far is [pre_spec-unet branch](https://github.com/silburt/ML_Music_Style_Transfer/tree/pre_spec-unet), but my hunch is that there have to be better options.
+
+#### To try next
+- Add the improvements of mel-spec branch to pre_spec-unet branch - namely loading on-the-fly so you can use all the data
+- add a normalization layer?
+- look into adding conditioning to the texture net piece? 
+- look into different architectures...

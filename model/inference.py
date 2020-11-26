@@ -29,6 +29,8 @@ class AudioSynthesizer():
         self.wps = pp_hp.wps
         self.midi_source = midi_source
         self.audio_source = audio_source
+        self.griffinlim = torchaudio.transforms.GriffinLim(n_fft=pp_hp.n_fft, n_iter=300, win_length=pp_hp.n_fft, hop_length=pp_hp.ws)
+
                 
     def get_test_midi(self):
         X = np.load(os.path.join(self.exp_dir,'test_data/test_X.npy'))
@@ -92,7 +94,8 @@ class AudioSynthesizer():
         output_dir = self.create_output_dir()
 
         for i in range(len(test_results)):
-            audio = self.griffinlim(test_results[i], audio_id = i+1)
+            pred = np.expm1(np.clip(test_results[i], 0, 20))
+            audio = self.run_griffinlim(pred, audio_id=i+1)
             sf.write(os.path.join(output_dir,'output-{}.wav'.format(i+1)), audio, self.sample_rate)
     
             if DEBUG is True:
@@ -100,11 +103,12 @@ class AudioSynthesizer():
                 import matplotlib.pyplot as plt
                 import librosa.display
                 torch_spec = torchaudio.transforms.Spectrogram(n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
-                target = torch_spec(torch.Tensor(audio_chunk)).detach().cpu().numpy()
+                target = torch_spec(torch.Tensor(audio)).detach().cpu().numpy()
                 fig, ax = plt.subplots(2, 1, sharex=True)
-                librosa.display.specshow(target, sr=pp_hp.sr, hop_length=pp_hp.ws, y_axis='linear', x_axis='time', ax=ax[0])
-                librosa.display.specshow(test_results[i], sr=pp_hp.sr, hop_length=pp_hp.ws, y_axis='linear', x_axis='time', ax=ax[0])
+                librosa.display.specshow(target, sr=pp_hp.sr, hop_length=pp_hp.ws, y_axis='log', x_axis='time', ax=ax[0])
+                librosa.display.specshow(pred, sr=pp_hp.sr, hop_length=pp_hp.ws, y_axis='log', x_axis='time', ax=ax[1])
                 plt.savefig(os.path.join(output_dir,'output-{}.png'.format(i+1)))
+
 
     def create_output_dir(self):
         success = False
@@ -118,11 +122,9 @@ class AudioSynthesizer():
                 dir_id += 1
         return audio_out_dir
 
-    def griffinlim(self, spectrogram, audio_id, n_iter=300, window='hann', n_fft=2048, hop_length=256, verbose=False):
-        #magnitude = np.sqrt(np.expm1(np.clip(spectrogram, 0, 20))) 
+    def run_griffinlim(self, spectrogram, audio_id, n_iter=300, window='hann', n_fft=2048, hop_length=256, verbose=False):
         #return librosa.griffinlim(magnitude, n_iter=n_iter, window=window, win_length=n_fft, hop_length=hop_length)
-        griffinlim = torchaudio.transforms.GriffinLim(n_fft=pp_hp.n_fft, n_iter=300, win_length=pp_hp.n_fft, hop_length=pp_hp.ws)
-        return griffinlim(spectrogram).detach().cpu().numpy()
+        return self.griffinlim(torch.Tensor(spectrogram)).detach().cpu().numpy()
 
 def main():
     parser = argparse.ArgumentParser()
