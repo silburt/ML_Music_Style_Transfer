@@ -50,7 +50,7 @@ class hyperparams(object):
 
 
 class DatasetPreprocessRealTime(torch.utils.data.Dataset):
-    def __init__(self, in_file, seed=42, n_read=None):
+    def __init__(self, in_file, seed=42, n_read=None, n_spec_precal=500):
         super(DatasetPreprocessRealTime, self).__init__()
 
         self.dataset = h5py.File(in_file, 'r')
@@ -79,6 +79,16 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         self.n_data = self.pianoroll.shape[0]
         random.seed(seed)
 
+        self.spec_precal = None
+        if n_spec_precal is not None:
+            print(f"Precalculating {n_spec_precal} to store in memory")
+            spec_precal = []
+            for index in range(n_spec_precal):
+                _, _, audio_chunk_rand, _ = self.select_piano_and_audio_chunks(index)
+                spec_precal.append(self._calc_input_conditioning(audio_chunk_rand))
+            self.spec_precal = spec_precal
+            self.n_spec_precal = n_spec_precal
+
 
     def select_piano_and_audio_chunks(self, index):
        # piano
@@ -100,6 +110,15 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         return pianoroll, onoff, audio_chunk_rand, audio_chunk
 
 
+    def _calc_input_conditioning(self, audio_chunk_rand):
+        X_cond = torch.log1p(self.torch_spectrogram(torch.Tensor(audio_chunk_rand)))
+        #X_cond = self.torch_mfcc(torch.Tensor(audio_chunk_rand))
+        #X_cond = self.torch_melspec(torch.Tensor(audio_chunk_rand))
+        #X_cond = librosa.feature.melspectrogram(y=audio_chunk_rand, sr=pp_hp.sr, 
+        #                                        n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
+        return X_cond
+
+
     def __getitem__(self, index):
         '''
         The input data are the pianoroll, onoff, a random mfcc from the same style
@@ -112,11 +131,7 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         pianoroll = np.transpose(pianoroll, (1, 0))
 
         # prepare input conditioning
-        X_cond = torch.log1p(self.torch_spectrogram(torch.Tensor(audio_chunk_rand)))
-        #X_cond = self.torch_mfcc(torch.Tensor(audio_chunk_rand))
-        #X_cond = self.torch_melspec(torch.Tensor(audio_chunk_rand))
-        #X_cond = librosa.feature.melspectrogram(y=audio_chunk_rand, sr=pp_hp.sr, 
-        #                                        n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
+        X_cond = self.n_spec_precal[index] if (self.n_spec_precal is not None and index < self.n_spec_precal) else self._calc_input_conditioning(audio_chunk_rand)
 
         # prepare target
         y = self.torch_spectrogram(torch.Tensor(audio_chunk))  # no log1p, done later in loss function
