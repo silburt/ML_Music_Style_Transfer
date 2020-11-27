@@ -81,17 +81,20 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         self.n_data = self.pianoroll.shape[0]
         random.seed(seed)
 
+        # pre-calculate the input conditioning and output spec to save time
+        # TODO: Need to loop through every 
         self.spec_precal = None
-        if n_spec_precal is not None:
-            n_spec_precal = self.n_data if n_spec_precal == -1 else min(self.n_data, n_spec_precal)
-            print(f"Precalculating {n_spec_precal} specs to store in memory")
+        self.n_spec_precal = n_spec_precal
+        # if n_spec_precal is not None:
+        #     n_spec_precal = self.n_data if n_spec_precal == -1 else min(self.n_data, n_spec_precal)
+        #     print(f"Precalculating {n_spec_precal} specs to store in memory")
 
-            spec_precal = []
-            for index in range(n_spec_precal):
-                _, _, audio_chunk_rand, _ = self.select_piano_and_audio_chunks(index)
-                spec_precal.append(self._calc_input_conditioning(audio_chunk_rand))
-            self.spec_precal = spec_precal
-            self.n_spec_precal = n_spec_precal
+        #     spec_precal = []
+        #     for index in range(n_spec_precal):
+        #         _, _, audio_chunk_rand, _ = self.select_piano_and_audio_chunks(index)
+        #         spec_precal.append(self._calc_input_conditioning(audio_chunk_rand))
+        #     self.spec_precal = spec_precal
+        
 
 
     def select_piano_and_audio_chunks(self, index):
@@ -135,7 +138,8 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         pianoroll = np.transpose(pianoroll, (1, 0))
 
         # prepare input conditioning
-        X_cond = self.spec_precal[index] if (self.n_spec_precal is not None and index < self.n_spec_precal) else self._calc_input_conditioning(audio_chunk_rand)
+        #X_cond = self.spec_precal[index] if (self.n_spec_precal is not None and index < self.n_spec_precal) else self._calc_input_conditioning(audio_chunk_rand)
+        X_cond = self._calc_input_conditioning(audio_chunk_rand)
 
         # prepare target
         y = self.torch_spectrogram(torch.Tensor(audio_chunk))  # no log1p, done later in loss function
