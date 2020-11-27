@@ -300,7 +300,7 @@ def main(args):
                                                              batch_size=args.batch_size, n_train_spec_precal=args.n_train_spec_precal,
                                                              input_cond=args.input_cond)
 
-    model = PerformanceNet(input_cond_dim=input_cond_dim)
+    model = PerformanceNet(input_cond_dim)
     if CUDA_FLAG == 1:
         model.cuda()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)

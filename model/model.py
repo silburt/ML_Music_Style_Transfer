@@ -180,7 +180,7 @@ class MBRBlock(nn.Module):
 
 
 class PerformanceNet(nn.Module):
-    def __init__(self, depth=5, start_channels=128, input_cond_dim=128):
+    def __init__(self, input_cond_dim, depth=5, start_channels=128):
         super(PerformanceNet, self).__init__()
         self.depth = depth
         self.start_channels = start_channels 
@@ -203,14 +203,17 @@ class PerformanceNet(nn.Module):
         self.down_convs = nn.ModuleList(self.down_convs)
         
         # down convs audio
-        outs_channel_list_audio = [int(1025*1.5), 2050, int(2050*1.5), 4100, int(4100*1.5)] # for specs
-        #outs_channel_list_audio = []
+        outs_channel_list_audio = [int(1025*1.5), 2050, int(2050*1.5), 4100, int(4100*1.5)] if input_cond_dim > 300 else []
         self.down_convs_audio = []
         for i in range(self.depth):
             ins = self.input_cond_dim if i == 0 else outs
-            #outs = self.input_cond_dim * (2 ** (i+1))
-            #outs_channel_list_audio.append(outs)
-            outs = outs_channel_list_audio[i]
+            if input_cond_dim > 300:
+                outs = outs_channel_list_audio[i]
+            else:
+                outs = self.input_cond_dim * (2 ** (i+1))
+                outs_channel_list_audio.append(outs)
+            print("audio conditioning outs:", outs)
+            
             pooling = True if i < self.depth-1 else False
             DC = DownConv(ins, outs, pooling=pooling, block_id=i)
             self.down_convs_audio.append(DC)  
