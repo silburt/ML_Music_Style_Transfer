@@ -227,8 +227,8 @@ class L2L1Loss:
     def __call__(self, pred, target):
         # From Engel (2017), Nsynth paper - We found that training on the log magnitude of the power spectra, 
         # peak normalized to be between 0 and 1, correlated better with perceptual distortion.
-        pred = torch.log1p(self.melscale(pred))
-        target = torch.log1p(self.melscale(target))
+        #pred = torch.log1p(self.melscale(pred))
+        #target = torch.log1p(self.melscale(target))
         total_loss = self.l2(pred, target) + self.alpha * self.l1(pred, target)
         return total_loss
 
@@ -296,10 +296,11 @@ def main(args):
     exp_dir = os.path.join(exp_root, hp.exp_name)
     os.makedirs(exp_dir)
 
+    # load data
     train_loader, test_loader, input_cond_dim = Process_Data(args.data_dir, n_train_read=args.n_train_read, n_test_read=args.n_test_read, 
                                                              batch_size=args.batch_size, n_train_spec_precal=args.n_train_spec_precal,
                                                              input_cond=args.input_cond)
-
+    # load model
     model = PerformanceNet(input_cond_dim)
     if CUDA_FLAG == 1:
         model.cuda()
