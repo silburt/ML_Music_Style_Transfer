@@ -82,6 +82,7 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         self.audios = {key: self.dataset[key] for key in self.dataset.keys() if 'audio_' in key}
         self.input_conditioning_from_spec = audio_transformations('from_spec', input_cond)
         self.input_conditioning_from_audio = audio_transformations('from_audio', input_cond)
+        self.spec_transformation_from_audio = audio_transformations('from_audio', 'spec')
 
         # load data from h5py
         if n_read is None:
@@ -107,7 +108,7 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
                 self.spec_precal[style] = []
                 for index in range(self.n_spec_precal):
                     audio_chunk = self._get_audio_chunk(style, index)
-                    self.spec_precal[style].append(self.transformations_from_audio['spec'](torch.Tensor(audio_chunk)))
+                    self.spec_precal[style].append(self.spec_transformation_from_audio(torch.Tensor(audio_chunk)))
             print(f"Precalculated {n_spec_precal} specs")
 
 
@@ -142,7 +143,7 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
             y = self.spec_precal[style][index]
         else:
             audio_chunk = self._get_audio_chunk(style, index)
-            y = self.transformations_from_audio['spec'](torch.Tensor(audio_chunk))
+            y = self.spec_transformation_from_audio(torch.Tensor(audio_chunk))
 
         # input condition
         if self.n_spec_precal is not None and rand_index < self.n_spec_precal:
