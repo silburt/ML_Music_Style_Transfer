@@ -78,8 +78,9 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         self.dataset = h5py.File(in_file, 'r')
         self.styles = [name.split('target_coords_')[1] for name in self.dataset.keys() if 'target_coords_' in name] # get styles from the data
 
-        # load all the raw audio files
+        # load all audio files and prepare transformations
         self.audios = {key: self.dataset[key] for key in self.dataset.keys() if 'audio_' in key}
+        print(f"using input conditioning: {input_cond}")
         self.input_conditioning_from_spec = audio_transformations('from_spec', input_cond)
         self.input_conditioning_from_audio = audio_transformations('from_audio', input_cond)
         self.spec_transformation_from_audio = audio_transformations('from_audio', 'spec')
@@ -114,13 +115,12 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
 
         # get input cond dim
         _X_cond, _y = self.get_audio_conditioning_and_target(0, 0, self.styles[0])
-        print("X_SHAPE!", _X_cond.shape)
         self.input_cond_dim = _X_cond.shape[0]
 
 
     def _get_audio_chunk(self, style, index):
         song_id, chunk_begin_index, chunk_end_index = self.target_coords[style][index].astype('int')
-        audio_chunk = self.audios[f'audio_{song_id}_{style}'][chunk_begin_index: chunk_end_index]   
+        audio_chunk = self.audios[f'audio_{song_id}_{style}'][chunk_begin_index: chunk_end_index]
         return audio_chunk
 
 
@@ -130,7 +130,7 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
             X_cond = self.input_conditioning_from_spec(spec)
         elif audio_chunk is not None:
             # calc from audio signal
-            X_cond = self.input_conditioning_from_audio(audio_chunk)
+            X_cond = self.input_conditioning_from_audio(torch.Tensor(audio_chunk))
             #X_cond = self.torch_spectrogram(torch.Tensor(audio_chunk_rand))
             # X_cond = torch.log1p(self.torch_spectrogram(torch.Tensor(audio_chunk_rand)))
             # X_cond = self.torch_mfcc(torch.Tensor(audio_chunk_rand))
@@ -227,8 +227,8 @@ class L2L1Loss:
     def __call__(self, pred, target):
         # From Engel (2017), Nsynth paper - We found that training on the log magnitude of the power spectra, 
         # peak normalized to be between 0 and 1, correlated better with perceptual distortion.
-        pred = torch.log1p(self.melscale(pred)).to('cuda')
-        target = torch.log1p(self.melscale(target)).to('cuda')
+        pred = torch.log1p(self.melscale(pred))
+        target = torch.log1p(self.melscale(target))
         total_loss = self.l2(pred, target) + self.alpha * self.l1(pred, target)
         return total_loss
 
