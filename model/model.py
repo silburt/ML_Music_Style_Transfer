@@ -203,11 +203,11 @@ class PerformanceNet(nn.Module):
         self.down_convs = nn.ModuleList(self.down_convs)
         
         # down convs audio
-        outs_channel_list_audio = [int(1025*1.5), 2050, int(2050*1.5), 4100, int(4100*1.5)] if input_cond_dim > 300 else []
+        outs_channel_list_audio = [int(1025*1.5), 2050, int(2050*1.5), 4100, int(4100*1.5)] if self.input_cond_dim > 300 else []
         self.down_convs_audio = []
         for i in range(self.depth):
             ins = self.input_cond_dim if i == 0 else outs
-            if input_cond_dim > 300:
+            if self.input_cond_dim > 300:
                 outs = outs_channel_list_audio[i]
             else:
                 outs = self.input_cond_dim * (2 ** (i+1))
