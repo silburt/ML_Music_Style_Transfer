@@ -180,11 +180,11 @@ class MBRBlock(nn.Module):
 
 
 class PerformanceNet(nn.Module):
-    def __init__(self, depth=5, start_channels=128, start_audio_cond_channels=1025):
+    def __init__(self, depth=5, start_channels=128, input_cond_dim=128):
         super(PerformanceNet, self).__init__()
         self.depth = depth
         self.start_channels = start_channels 
-        self.start_audio_cond_channels = start_audio_cond_channels
+        self.input_cond_dim = input_cond_dim
         self.construct_layers()
         self.reset_params()
         
@@ -207,8 +207,8 @@ class PerformanceNet(nn.Module):
         #outs_channel_list_audio = []
         self.down_convs_audio = []
         for i in range(self.depth):
-            ins = self.start_audio_cond_channels if i == 0 else outs
-            #outs = self.start_audio_cond_channels * (2 ** (i+1))
+            ins = self.input_cond_dim if i == 0 else outs
+            #outs = self.input_cond_dim * (2 ** (i+1))
             #outs_channel_list_audio.append(outs)
             outs = outs_channel_list_audio[i]
             pooling = True if i < self.depth-1 else False

@@ -105,11 +105,17 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
             self.n_spec_precal = self.n_data if self.n_spec_precal == -1 else min(self.n_data, self.n_spec_precal)
             self.spec_precal = {}
             for style in self.styles:
+                print(f"style: {style}")
                 self.spec_precal[style] = []
                 for index in range(self.n_spec_precal):
                     audio_chunk = self._get_audio_chunk(style, index)
                     self.spec_precal[style].append(self.spec_transformation_from_audio(torch.Tensor(audio_chunk)))
             print(f"Precalculated {n_spec_precal} specs")
+
+        # get input cond dim
+        _X_cond, _y = self.get_audio_conditioning_and_target(0, 0, self.styles[0])
+        print("X_SHAPE!", _X_cond.shape)
+        self.input_cond_dim = _X_cond.shape[0]
 
 
     def _get_audio_chunk(self, style, index):
@@ -196,16 +202,19 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         return self.n_data
 
 
-def Process_Data(data_dir, n_train_read=None, n_test_read=None, batch_size=16, n_train_spec_precal=1000):
+def Process_Data(data_dir, n_train_read=None, n_test_read=None, batch_size=16, n_train_spec_precal=1000, input_cond='spec'):
     print("loading training data")
-    train_dataset = DatasetPreprocessRealTime(data_dir + '_train.hdf5', n_read=n_train_read, n_spec_precal=n_train_spec_precal)
+    train_dataset = DatasetPreprocessRealTime(data_dir + '_train.hdf5', n_read=n_train_read, n_spec_precal=n_train_spec_precal, input_cond=input_cond)
+    input_cond_dim = train_dataset.input_cond_dim
+
     print("loading test data")
-    test_dataset = DatasetPreprocessRealTime(data_dir + '_test.hdf5', n_read=n_test_read, n_spec_precal=None)
+    test_dataset = DatasetPreprocessRealTime(data_dir + '_test.hdf5', n_read=n_test_read, n_spec_precal=None, input_cond=input_cond)
 
     kwargs = {}
     train_loader = utils.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, **kwargs)
     test_loader = utils.DataLoader(test_dataset, batch_size=batch_size, **kwargs)
-    return train_loader, test_loader
+
+    return train_loader, test_loader, input_cond_dim
 
 
 class L2L1Loss:
@@ -218,8 +227,8 @@ class L2L1Loss:
     def __call__(self, pred, target):
         # From Engel (2017), Nsynth paper - We found that training on the log magnitude of the power spectra, 
         # peak normalized to be between 0 and 1, correlated better with perceptual distortion.
-        pred = torch.log1p(self.melscale(pred))
-        target = torch.log1p(self.melscale(target))
+        pred = torch.log1p(self.melscale(pred)).to('cuda')
+        target = torch.log1p(self.melscale(target)).to('cuda')
         total_loss = self.l2(pred, target) + self.alpha * self.l1(pred, target)
         return total_loss
 
@@ -287,15 +296,17 @@ def main(args):
     exp_dir = os.path.join(exp_root, hp.exp_name)
     os.makedirs(exp_dir)
 
-    model = PerformanceNet()
+    train_loader, test_loader, input_cond_dim = Process_Data(args.data_dir, n_train_read=args.n_train_read, n_test_read=args.n_test_read, 
+                                                             batch_size=args.batch_size, n_train_spec_precal=args.n_train_spec_precal,
+                                                             input_cond=args.input_cond)
+
+    model = PerformanceNet(input_cond_dim=input_cond_dim)
     if CUDA_FLAG == 1:
         model.cuda()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
     model.zero_grad()
     optimizer.zero_grad()
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
-    train_loader, test_loader = Process_Data(args.data_dir, n_train_read=args.n_train_read, n_test_read=args.n_test_read, 
-                                             batch_size=args.batch_size, n_train_spec_precal=args.n_train_spec_precal)
     print ('start training')
     for epoch in range(hp.train_epoch):
         loss = train(model, epoch, train_loader, optimizer, hp.iter_train_loss)
@@ -323,6 +334,7 @@ if __name__ == "__main__":
     parser.add_argument("--n-train-read", type=int, default=None, help='How many data points to read (length of an epoch)')
     parser.add_argument("--n-test-read", type=int, default=None, help='How many data points to read (length of an epoch)')
     parser.add_argument("--n-train-spec-precal", type=int, default=None, help='How many spectrograms to precalculate')
+    parser.add_argument("--input-cond", type=str, default='mel', help='default type for the input conditioning')
     parser.add_argument("--batch-size", type=int, default=16)
     args = parser.parse_args()
     
