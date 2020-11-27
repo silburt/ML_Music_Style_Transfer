@@ -32,6 +32,8 @@ def test_griffinlim():
 def test_torchgriffinlim():
     # init torch
     t_spec = torchaudio.transforms.Spectrogram(n_fft=hp.n_fft, hop_length=hp.ws)
+    t_melscale = torchaudio.transforms.MelScale(sample_rate=hp.sr)
+    t_invmelscale = torchaudio.transforms.InverseMelScale(n_stft=hp.n_fft, sample_rate=hp.sr)
     griffinlim = torchaudio.transforms.GriffinLim(n_fft=hp.n_fft, n_iter=300, win_length=hp.n_fft, hop_length=hp.ws)
 
     # load audio
@@ -45,6 +47,14 @@ def test_torchgriffinlim():
     audio_chunk = audio[(step * hp.ws * hp.stride): (step * hp.ws * hp.stride) + n_samples_per_chunk]
     spec = t_spec(torch.Tensor(audio_chunk))
 
+    # test melscale inversion
+    #print("Testing melscale conversion/inversion")
+    #melspec = t_melscale(spec)
+    #spec = t_invmelscale(melspec)   # this is incredibly slow
+
+    # test clamping on small freq
+    spec[spec < 1e-2] = 0
+
     # test normalization - so it seems that log1p or normalizing the spectrogram degrades griffin-lim quite a bit
     # SO you just apply these transformations when calculating the loss, not the raw model prediction
     #spec -= spec.min(1, keepdim=True)[0]
@@ -53,6 +63,7 @@ def test_torchgriffinlim():
     #print("min/max values in spec", torch.min(spec), torch.max(spec))
 
     # convert back to audio
+    print("converting back to audio")
     inverse = griffinlim(spec).detach().cpu().numpy()
     sf.write(f'outputs/test_griffinlim_{song_id}_{style_id}_sr{hp.sr}_torch.wav', inverse, hp.sr)
 

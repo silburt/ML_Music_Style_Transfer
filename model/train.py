@@ -51,8 +51,28 @@ class hyperparams(object):
         self.best_epoch = 0
 
 
+class AudioTransformations:
+    def __init__(self):
+        # init audio transformations
+        self.transformations = {
+            'from_spec': {
+                'spec': lambda x: x,    # pass in a spec, just return it
+                'mel': torchaudio.transforms.MelScale(sample_rate=pp_hp.sr, f_min=20),
+            },
+            'from_audio': {
+                'spec': torchaudio.transforms.Spectrogram(n_fft=pp_hp.n_fft, hop_length=pp_hp.ws),
+                'mel': torchaudio.transforms.MelSpectrogram(sample_rate=pp_hp.sr, n_fft=pp_hp.n_fft, hop_length=pp_hp.ws),
+                'mfcc': torchaudio.transforms.MFCC(sample_rate=pp_hp.sr, n_mfcc=16, melkwargs={'hop_length': pp_hp.ws, 'n_fft': pp_hp.n_fft, })
+            }
+        }
+    def __call__(self, from_str, type_str):
+        return self.transformations[from_str][type_str]
+
+audio_transformations = AudioTransformations()
+
+
 class DatasetPreprocessRealTime(torch.utils.data.Dataset):
-    def __init__(self, in_file, seed=42, n_read=None, n_spec_precal=-1):
+    def __init__(self, in_file, seed=42, n_read=None, n_spec_precal=None, input_cond='mel'):
         super(DatasetPreprocessRealTime, self).__init__()
 
         self.dataset = h5py.File(in_file, 'r')
@@ -60,29 +80,23 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
 
         # load all the raw audio files
         self.audios = {key: self.dataset[key] for key in self.dataset.keys() if 'audio_' in key}
+        self.input_conditioning_from_spec = audio_transformations('from_spec', input_cond)
+        self.input_conditioning_from_audio = audio_transformations('from_audio', input_cond)
 
-        # init specs
-        self.torch_spectrogram = torchaudio.transforms.Spectrogram(n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
-        melkwargs = {'hop_length': pp_hp.ws, 'n_fft': pp_hp.n_fft, }
-        self.torch_mfcc = torchaudio.transforms.MFCC(sample_rate=pp_hp.sr, n_mfcc=16, melkwargs=melkwargs)
-        self.torch_melspec = torchaudio.transforms.MelSpectrogram(sample_rate=pp_hp.sr, n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
-
+        # load data from h5py
         if n_read is None:
             n_read = LARGE_NUMBER   # large number to read everything
 
         self.pianoroll = self.dataset['pianoroll'][:n_read]
         self.onoff = self.dataset['onoff'][:n_read]
-        #self.mfccs = {}
         self.target_coords = {}
         for style in self.styles:
             print(f"loading style: {style}")
             self.target_coords[style] = self.dataset['target_coords_' + style][:n_read] 
-
         self.n_data = self.pianoroll.shape[0]
         random.seed(seed)
 
         # pre-calculate the input conditioning and output spec to save time
-        # TODO: Need to loop through every 
         self.spec_precal = None
         self.n_spec_precal = n_spec_precal
         if self.n_spec_precal is not None:
@@ -93,7 +107,7 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
                 self.spec_precal[style] = []
                 for index in range(self.n_spec_precal):
                     audio_chunk = self._get_audio_chunk(style, index)
-                    self.spec_precal[style].append(self.torch_spectrogram(torch.Tensor(audio_chunk)))
+                    self.spec_precal[style].append(self.transformations_from_audio['spec'](torch.Tensor(audio_chunk)))
             print(f"Precalculated {n_spec_precal} specs")
 
 
@@ -103,12 +117,21 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         return audio_chunk
 
 
-    def _calc_input_conditioning(self, audio_chunk_rand):
-        X_cond = torch.log1p(self.torch_spectrogram(torch.Tensor(audio_chunk_rand)))
-        #X_cond = self.torch_mfcc(torch.Tensor(audio_chunk_rand))
-        #X_cond = self.torch_melspec(torch.Tensor(audio_chunk_rand))
-        #X_cond = librosa.feature.melspectrogram(y=audio_chunk_rand, sr=pp_hp.sr, 
-        #                                        n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
+    def _calc_input_conditioning(self, audio_chunk=None, spec=None):
+        if spec is not None:
+            # apply transformation on spec
+            X_cond = self.input_conditioning_from_spec(spec)
+        elif audio_chunk is not None:
+            # calc from audio signal
+            X_cond = self.input_conditioning_from_audio(audio_chunk)
+            #X_cond = self.torch_spectrogram(torch.Tensor(audio_chunk_rand))
+            # X_cond = torch.log1p(self.torch_spectrogram(torch.Tensor(audio_chunk_rand)))
+            # X_cond = self.torch_mfcc(torch.Tensor(audio_chunk_rand))
+            # X_cond = self.torch_melspec(torch.Tensor(audio_chunk_rand))
+            # X_cond = librosa.feature.melspectrogram(y=audio_chunk_rand, sr=pp_hp.sr, 
+            #                                        n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
+        else:
+            raise ValueError("audio chunk and spec cant both be None")
         return X_cond
 
 
@@ -119,15 +142,16 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
             y = self.spec_precal[style][index]
         else:
             audio_chunk = self._get_audio_chunk(style, index)
-            y = self.torch_spectrogram(torch.Tensor(audio_chunk))
+            y = self.transformations_from_audio['spec'](torch.Tensor(audio_chunk))
 
         # input condition
         if self.n_spec_precal is not None and rand_index < self.n_spec_precal:
             # NOTE: this needs to be changed if input contioning is no longer spec
-            X_cond = self.spec_precal[style][rand_index]    
+            spec_rand = self.spec_precal[style][rand_index]
+            X_cond = self._calc_input_conditioning(spec=spec_rand)
         else:
             audio_chunk_rand = self._get_audio_chunk(style, rand_index)
-            X_cond = self._calc_input_conditioning(audio_chunk_rand)
+            X_cond = self._calc_input_conditioning(audio_chunk=audio_chunk_rand)
         return X_cond, y
 
 
@@ -187,14 +211,14 @@ class L2L1Loss:
     def __init__(self, alpha=1):
         self.l1 = nn.L1Loss()
         self.l2 = nn.MSELoss()
+        self.melscale = audio_transformations('from_spec', 'mel')
         self.alpha = alpha
 
     def __call__(self, pred, target):
         # From Engel (2017), Nsynth paper - We found that training on the log magnitude of the power spectra, 
         # peak normalized to be between 0 and 1, correlated better with perceptual distortion.
-        #pred = torch.log1p(torch.clamp(pred, min=0))
-        #target = torch.log1p(target)
-
+        pred = torch.log1p(self.melscale(pred))
+        target = torch.log1p(self.melscale(target))
         total_loss = self.l2(pred, target) + self.alpha * self.l1(pred, target)
         return total_loss
 
