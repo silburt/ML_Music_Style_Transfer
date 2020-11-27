@@ -139,6 +139,8 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
             #                                        n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
         else:
             raise ValueError("audio chunk and spec cant both be None")
+        # any final additional transforms you want
+        X_cond = torch.log1p(X_cond)
         return X_cond
 
 
