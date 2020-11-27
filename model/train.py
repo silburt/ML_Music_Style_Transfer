@@ -52,7 +52,7 @@ class hyperparams(object):
 
 
 class DatasetPreprocessRealTime(torch.utils.data.Dataset):
-    def __init__(self, in_file, seed=42, n_read=None, n_spec_precal=500):
+    def __init__(self, in_file, seed=42, n_read=None, n_spec_precal=-1):
         super(DatasetPreprocessRealTime, self).__init__()
 
         self.dataset = h5py.File(in_file, 'r')
@@ -63,9 +63,9 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
 
         # init specs
         self.torch_spectrogram = torchaudio.transforms.Spectrogram(n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
-        #melkwargs = {'hop_length': pp_hp.ws, 'n_fft': pp_hp.n_fft, }
-        #self.torch_mfcc = torchaudio.transforms.MFCC(sample_rate=pp_hp.sr, n_mfcc=16, melkwargs=melkwargs)
-        #self.torch_melspec = torchaudio.transforms.MelSpectrogram(sample_rate=pp_hp.sr, n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
+        melkwargs = {'hop_length': pp_hp.ws, 'n_fft': pp_hp.n_fft, }
+        self.torch_mfcc = torchaudio.transforms.MFCC(sample_rate=pp_hp.sr, n_mfcc=16, melkwargs=melkwargs)
+        self.torch_melspec = torchaudio.transforms.MelSpectrogram(sample_rate=pp_hp.sr, n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)
 
         if n_read is None:
             n_read = LARGE_NUMBER   # large number to read everything
@@ -85,36 +85,22 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         # TODO: Need to loop through every 
         self.spec_precal = None
         self.n_spec_precal = n_spec_precal
-        # if n_spec_precal is not None:
-        #     n_spec_precal = self.n_data if n_spec_precal == -1 else min(self.n_data, n_spec_precal)
-        #     print(f"Precalculating {n_spec_precal} specs to store in memory")
+        if self.n_spec_precal is not None:
+            print(f"Precalculating {n_spec_precal} specs to store in memory")
+            self.n_spec_precal = self.n_data if self.n_spec_precal == -1 else min(self.n_data, self.n_spec_precal)
+            self.spec_precal = {}
+            for style in self.styles:
+                self.spec_precal[style] = []
+                for index in range(self.n_spec_precal):
+                    audio_chunk = self._get_audio_chunk(style, index)
+                    self.spec_precal[style].append(self.torch_spectrogram(torch.Tensor(audio_chunk)))
+            print(f"Precalculated {n_spec_precal} specs")
 
-        #     spec_precal = []
-        #     for index in range(n_spec_precal):
-        #         _, _, audio_chunk_rand, _ = self.select_piano_and_audio_chunks(index)
-        #         spec_precal.append(self._calc_input_conditioning(audio_chunk_rand))
-        #     self.spec_precal = spec_precal
-        
 
-
-    def select_piano_and_audio_chunks(self, index):
-       # piano
-        pianoroll = self.pianoroll[index]
-        onoff = self.onoff[index]
-
-        # pick random style
-        style = random.choice(self.styles)
-
-        # random audio_chunk of selected style for input conditioning
-        rand_index = random.randint(0, self.n_data - 1)
-        song_id_rand, chunk_begin_index_rand, chunk_end_index_rand = self.target_coords[style][rand_index].astype('int')
-        audio_chunk_rand = self.audios[f'audio_{song_id_rand}_{style}'][chunk_begin_index_rand: chunk_end_index_rand]
-        
-        # get correct audio_chunk of selected style for output target
+    def _get_audio_chunk(self, style, index):
         song_id, chunk_begin_index, chunk_end_index = self.target_coords[style][index].astype('int')
-        audio_chunk = self.audios[f'audio_{song_id}_{style}'][chunk_begin_index: chunk_end_index]
-
-        return pianoroll, onoff, audio_chunk_rand, audio_chunk
+        audio_chunk = self.audios[f'audio_{song_id}_{style}'][chunk_begin_index: chunk_end_index]   
+        return audio_chunk
 
 
     def _calc_input_conditioning(self, audio_chunk_rand):
@@ -126,26 +112,49 @@ class DatasetPreprocessRealTime(torch.utils.data.Dataset):
         return X_cond
 
 
+    def get_audio_conditioning_and_target(self, index, rand_index, style):
+        # target
+        if self.n_spec_precal is not None and index < self.n_spec_precal:
+            # use pre-calculated values
+            y = self.spec_precal[style][index]
+        else:
+            audio_chunk = self._get_audio_chunk(style, index)
+            y = self.torch_spectrogram(torch.Tensor(audio_chunk))
+
+        # input condition
+        if self.n_spec_precal is not None and rand_index < self.n_spec_precal:
+            # NOTE: this needs to be changed if input contioning is no longer spec
+            X_cond = self.spec_precal[style][rand_index]    
+        else:
+            audio_chunk_rand = self._get_audio_chunk(style, rand_index)
+            X_cond = self._calc_input_conditioning(audio_chunk_rand)
+        return X_cond, y
+
+
+    def get_pianoroll(self, index):
+        # prepare pianoroll
+        pianoroll = self.pianoroll[index]
+        onoff = self.onoff[index]
+
+        pianoroll = np.concatenate((pianoroll, onoff), axis=-1)
+        pianoroll = np.transpose(pianoroll, (1, 0))
+        return pianoroll
+
+
     def __getitem__(self, index):
         '''
         The input data are the pianoroll, onoff, a random mfcc from the same style
         The output data is the spectrogram calculated on-the-fly (to save space) for the corresponding pianoroll/onoff
         '''
-        pianoroll, onoff, audio_chunk_rand, audio_chunk = self.select_piano_and_audio_chunks(index)
+        # get pianoroll
+        pianoroll = self.get_pianoroll(index)
 
-        # prepare pianoroll
-        pianoroll = np.concatenate((pianoroll, onoff), axis=-1)
-        pianoroll = np.transpose(pianoroll, (1, 0))
+        # prepare audio input / target
+        style = random.choice(self.styles)
+        rand_index = random.randint(0, self.n_data - 1)
+        X_cond, y = self.get_audio_conditioning_and_target(index, rand_index, style)
 
-        # prepare input conditioning
-        #X_cond = self.spec_precal[index] if (self.n_spec_precal is not None and index < self.n_spec_precal) else self._calc_input_conditioning(audio_chunk_rand)
-        X_cond = self._calc_input_conditioning(audio_chunk_rand)
-
-        # prepare target
-        y = self.torch_spectrogram(torch.Tensor(audio_chunk))  # no log1p, done later in loss function
-        #y = self.torch_spectrogram(torch.Tensor(audio_chunk))
-        #y = np.square(np.abs(librosa.stft(audio_chunk, n_fft=pp_hp.n_fft, hop_length=pp_hp.ws)))
-
+        # cudify
         if CUDA_FLAG == 1:
             X = torch.cuda.FloatTensor(pianoroll)
             #X_cond = torch.cuda.FloatTensor(X_cond)
@@ -183,8 +192,9 @@ class L2L1Loss:
     def __call__(self, pred, target):
         # From Engel (2017), Nsynth paper - We found that training on the log magnitude of the power spectra, 
         # peak normalized to be between 0 and 1, correlated better with perceptual distortion.
-        pred = torch.log1p(torch.clamp(pred, min=0))
-        target = torch.log1p(target)
+        #pred = torch.log1p(torch.clamp(pred, min=0))
+        #target = torch.log1p(target)
+
         total_loss = self.l2(pred, target) + self.alpha * self.l1(pred, target)
         return total_loss
 

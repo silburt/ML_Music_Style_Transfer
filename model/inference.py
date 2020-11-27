@@ -91,12 +91,12 @@ class AudioSynthesizer():
         with torch.no_grad():
             model.eval()    
             test_results = model(score, spec, onoff)
-            test_results = test_results.cpu().numpy()
+            test_results = test_results.cpu()
  
         output_dir = self.create_output_dir()
 
         for i in range(len(test_results)):
-            pred = np.expm1(np.clip(test_results[i], 0, 20))
+            pred = test_results[i]
             audio = self.run_griffinlim(pred, audio_id=i+1)
             sf.write(os.path.join(output_dir,'output-{}.wav'.format(i+1)), audio, self.sample_rate)
     
@@ -108,7 +108,7 @@ class AudioSynthesizer():
                 target = torch_spec(torch.Tensor(audio)).detach().cpu().numpy()
                 fig, ax = plt.subplots(2, 1, sharex=True)
                 librosa.display.specshow(target, sr=pp_hp.sr, hop_length=pp_hp.ws, y_axis='log', x_axis='time', ax=ax[0])
-                librosa.display.specshow(pred, sr=pp_hp.sr, hop_length=pp_hp.ws, y_axis='log', x_axis='time', ax=ax[1])
+                librosa.display.specshow(pred.numpy(), sr=pp_hp.sr, hop_length=pp_hp.ws, y_axis='log', x_axis='time', ax=ax[1])
                 plt.savefig(os.path.join(output_dir,'output-{}.png'.format(i+1)))
 
 
@@ -124,8 +124,7 @@ class AudioSynthesizer():
                 dir_id += 1
         return audio_out_dir
 
-    def run_griffinlim(self, spectrogram, audio_id, n_iter=300, window='hann', n_fft=2048, hop_length=256, verbose=False):
-        #return librosa.griffinlim(magnitude, n_iter=n_iter, window=window, win_length=n_fft, hop_length=hop_length)
+    def run_griffinlim(self, spectrogram, audio_id):
         return self.griffinlim(torch.Tensor(spectrogram)).detach().cpu().numpy()
 
 
@@ -146,29 +145,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-            
-
-# legacy
-# def _griffinlim(spectrogram, audio_id, n_iter=300, window='hann', n_fft=2048, hop_length=256, verbose=False):
-#     print ('Synthesizing audio {}'.format(audio_id))
-
-#     if hop_length == -1:
-#         hop_length = n_fft // 4
-#         spectrogram[0:5] = 0
-
-#     spectrogram[150:] = 0
-#     angles = np.exp(2j * np.pi * np.random.rand(*spectrogram.shape))
-#     t = tqdm(range(n_iter), ncols=100, mininterval=2.0, disable=not verbose)
-#     for i in t:
-#         full = np.abs(spectrogram).astype(np.complex) * angles
-#         inverse = librosa.istft(full, hop_length = hop_length, window = window)
-#         rebuilt = librosa.stft(inverse, n_fft = n_fft, hop_length = hop_length, window = window)
-#         angles = np.exp(1j * np.angle(rebuilt))
-
-#         if verbose:
-#             diff = np.abs(spectrogram) - np.abs(rebuilt)
-#             t.set_postfix(loss=np.linalg.norm(diff, 'fro'))
-
-#     full = np.abs(spectrogram).astype(np.complex) * angles
-#     inverse = librosa.istft(full, hop_length = hop_length, window = window)
-#     return inverse
